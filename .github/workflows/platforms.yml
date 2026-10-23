@@ -1,0 +1,65 @@
+name: sysmon native platforms
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux native dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev clang
+      - run: cargo check --locked --all-targets
+      - run: cargo test --locked --lib
+
+  ios:
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [aarch64-apple-ios, aarch64-apple-ios-sim]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      # NSH builds a UIKit runner that depends on this library. src/main.rs is
+      # intentionally the desktop entry; it is not the mobile app entry point.
+      - run: cargo check --locked --lib --target ${{ matrix.target }}
+
+  android:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [aarch64-linux-android, x86_64-linux-android]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager 'ndk;27.2.12479018'
+      - name: Check native mobile library
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          export PATH="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+          export CC_aarch64_linux_android=aarch64-linux-android28-clang
+          export CC_x86_64_linux_android=x86_64-linux-android28-clang
+          export AR_aarch64_linux_android=llvm-ar
+          export AR_x86_64_linux_android=llvm-ar
+          cargo check --locked --lib --target "$TARGET"

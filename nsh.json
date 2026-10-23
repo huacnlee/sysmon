@@ -1,0 +1,9 @@
+{
+  "name": "sysmon",
+  "id": "dev.sysmon.app",
+  "version": "0.1.0",
+  "build": 1,
+  "rust": ".",
+  "root": "App",
+  "appearance": "dark"
+}
