@@ -19,7 +19,7 @@ fn main() -> impl std::process::Termination {
             title: "sysmon".to_owned(),
             appearance: nsh_core::platform::Appearance::Dark,
             app_id: "dev.sysmon.app".to_owned(),
-            size: (1280, 800),
+            size: (1080, 760),
             ..Default::default()
         },
     )

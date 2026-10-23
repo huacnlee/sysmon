@@ -426,7 +426,7 @@ fn sidebar(tab: Signal<usize>) -> impl IntoElement {
         .flex_shrink_0()
         .bg(rgb(0x0d0d0e))
         .p_3()
-        .gap_2()
+        .gap_1()
         .when(!is_desktop(), |v| {
             v.child(
                 view()
