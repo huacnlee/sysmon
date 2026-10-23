@@ -44,7 +44,6 @@ Run each target on a host with its platform SDK installed. The application root 
 ```sh
 cargo check --locked --all-targets
 cargo test --locked --lib
-nsh test
 ```
 
 For mobile library checks, first install the corresponding Rust target:

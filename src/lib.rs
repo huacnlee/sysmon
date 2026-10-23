@@ -457,7 +457,12 @@ fn sidebar(tab: Signal<usize>) -> impl IntoElement {
                 .child(title("●  On this device", COLORS[0]))
                 .child(label("No cloud telemetry")),
         )
-        .child(view().px_3().py_2().child(label("sysmon · 0.1.0")))
+        .child(
+            view()
+                .px_3()
+                .py_2()
+                .child(label(concat!("sysmon · ", env!("CARGO_PKG_VERSION")))),
+        )
 }
 fn mobile_navigation(tab: Signal<usize>) -> impl IntoElement {
     scroll().horizontal().scrollbar(false).h(px(43.)).child(
