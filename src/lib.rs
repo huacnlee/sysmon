@@ -3,6 +3,9 @@ use nsh_core::ui::prelude::*;
 use std::{sync::mpsc, time::Duration};
 mod app_list;
 mod apps;
+mod charts;
+mod live_views;
+mod motion;
 #[cfg(target_os = "ios")]
 mod platform_ios;
 mod providers;
@@ -203,250 +206,6 @@ fn row(a: impl Into<String>, b: impl Into<String>) -> impl IntoElement {
         .child(label(a))
         .child(text(b.into()).text_size(px(12.)))
 }
-fn graph(values: &[f32], color: u32, large: bool) -> impl IntoElement {
-    graph_sized(values, color, large, if large { 100. } else { 28. })
-}
-fn graph_sized(values: &[f32], color: u32, large: bool, h: f32) -> impl IntoElement {
-    let width = signal(0_f32);
-    let values = values.to_vec();
-
-    canvas(move || {
-        let measured = width.get();
-        let available = window().width.0
-            - if window().width.0 >= 1000. { 168. } else { 0. }
-            - if window().width.0 < 600. { 24. } else { 40. }
-            - 32.;
-        let w = if measured > 0. {
-            measured
-        } else if available >= 396. {
-            available - 176.
-        } else {
-            available
-        }
-        .max(1.);
-        let mut p = Painter::new();
-        if large {
-            for i in 0..4 {
-                let y = i as f32 * h / 3.;
-                p = p
-                    .stroke_color(rgb(0x2b2b2e))
-                    .line_width(1.)
-                    .begin_path()
-                    .move_to(0., y)
-                    .line_to(w, y)
-                    .stroke();
-            }
-            if !values.is_empty() {
-                p = p.stroke_color(rgb(color)).line_width(2.).begin_path();
-                for (i, v) in values.iter().enumerate() {
-                    let x = (60 - values.len() + i) as f32 * w / 59.;
-                    let y = h - (v / 100. * h).clamp(0., h);
-                    p = if i == 0 {
-                        p.move_to(x, y)
-                    } else {
-                        p.line_to(x, y)
-                    };
-                }
-                p = p.stroke();
-            }
-        } else {
-            let step = w / 60.;
-            for (i, v) in values.iter().enumerate() {
-                let x = (60 - values.len() + i) as f32 * step;
-                let bar = (v / 100. * h).clamp(2., h);
-                p = p
-                    .fill_style(rgb(color))
-                    .fill_rect(x, h - bar, (step - 2.).max(1.), bar);
-            }
-        }
-        p
-    })
-    .w_full()
-    .h(px(h))
-    .on_layout(move |bounds: &Bounds<Points>| width.set(bounds.size.width.0))
-}
-
-fn overview(s: &Sample, e: &providers::Extras, tab: Signal<usize>) -> impl IntoElement {
-    let avg = s.history.iter().sum::<f32>() / s.history.len().max(1) as f32;
-    view().gap_3()
- .child(view().flex_row().flex_wrap().items_start().gap_3()
-  .child(view().flex_1().min_w(px(280.)).gap_2()
-   .child(trend_card(1,"CPU activity",reading(s.cpu_available,format!("{:.0} %",s.cpu)),reading(!s.history.is_empty(),format!("{:.1}% average · {} cores",avg,s.cores)),s.history.clone(),tab))
-   .child(trend_card(2,"Memory by type",reading(s.memory_available,gb(s.memory)),if cfg!(target_os="ios"){"sysmon resident memory".into()}else{format!("{} available",reading(s.memory_available,gb(s.total.saturating_sub(s.memory))))},s.memory_history.clone(),tab))
-   .child(trend_card(4,"Network transfer",reading(s.network_available,rate(s.rx)),format!("↑ {}",reading(s.network_available,rate(s.tx))),normalized(&s.network_history),tab)))
-  .child(view().flex_1().flex_grow(1.25).min_w(px(300.)).gap_3()
-   .child(view().p_1().gap_3()
-    .child(view().flex_row().justify_between().items_center().child(title("Device snapshot",0xeeeef1)).child(chip(if cfg!(target_os="ios"){"App + device context"}else{"On this device"},0x8cbf96)))
-    .child(label("Resources are sampled locally. Select a category for its history, applications and device details."))
-    .child(view().gap_2().child(row(if cfg!(target_os="ios"){"App resident / physical"}else{"Memory in use"},reading(s.memory_available,format!("{} of {}",gb(s.memory),gb(s.total)))))
-     .child(memory_distribution(s.memory,s.total,s.memory_available))
-     .child(view().flex_row().flex_wrap().gap_3().child(title(if cfg!(target_os="ios"){"● App resident"}else{"● Used"},COLORS[2])).child(label(if cfg!(target_os="ios"){"● Other memory · usage unknown"}else{"● Available"}))))
-    .child(view().border_1().border_color(rgb(0x2b2b2d)).rounded(px(12.)).p_3().gap_3()
-     .child(row("Operating system",system_name())).child(row("Host",system_host()))
-     .child(row("Storage available",reading(s.disk_available,gb(s.free))))
-     .child(row("Battery",e.battery.as_ref().map(|b|format!("{:.0}% · {}",b.percent,b.status)).unwrap_or_else(||"Unavailable".into())))
-     .child(row("Uptime",if cfg!(target_os="ios"){"Unavailable".into()}else{duration(system_uptime())}))))
-   .child(process_panel(s,true))))
- .child(view().flex_row().flex_wrap().gap_2().children([(10,s.workloads.projects.len(),"Development projects"),(11,s.workloads.agents.len(),"Coding sessions"),(12,e.containers.len(),"Docker containers")].into_iter().map(move|(i,count,caption)|view().flex_1().min_w(px(220.)).border_1().border_color(rgb(0x2b2b2d)).rounded(px(12.)).p_3().flex_row().items_center().gap_2().on_press(move||tab.set(i)).hover(|v|v.bg(rgb(PANEL)))
-  .child(visuals::icon(i,COLORS[i],22.)).child(view().flex_1().gap_1().child(title(count.to_string(),0xeeeef1)).child(label(caption))).child(label("↗")))))
-}
-fn trend_card(
-    index: usize,
-    heading: &str,
-    value: String,
-    note: String,
-    history: Vec<f32>,
-    tab: Signal<usize>,
-) -> impl IntoElement {
-    view()
-        .bg(rgb(PANEL))
-        .rounded(px(16.))
-        .p_3()
-        .gap_2()
-        .on_press(move || tab.set(index))
-        .hover(|v| v.bg(rgb(0x1c1c1e)))
-        .child(
-            view()
-                .flex_row()
-                .items_center()
-                .gap_2()
-                .child(visuals::icon(index, COLORS[index], 15.))
-                .child(title(heading.to_owned(), COLORS[index])),
-        )
-        .child(
-            view()
-                .flex_row()
-                .items_end()
-                .gap_3()
-                .child(
-                    view()
-                        .flex_1()
-                        .min_w(px(110.))
-                        .gap_1()
-                        .child(value_line(value))
-                        .child(label(note)),
-                )
-                .child(
-                    view()
-                        .w(relative(0.48))
-                        .min_w(px(100.))
-                        .gap_2()
-                        .child(mini_chart(history, index))
-                        .child(label("2 min history")),
-                ),
-        )
-}
-fn memory_distribution(used: u64, total: u64, available: bool) -> impl IntoElement {
-    let fraction = if available && total > 0 {
-        used as f32 / total as f32
-    } else {
-        0.
-    };
-    view()
-        .h(px(6.))
-        .w_full()
-        .rounded_full()
-        .bg(rgb(0x2c2c30))
-        .overflow_hidden()
-        .when(available, |v| {
-            v.child(
-                view()
-                    .h(px(6.))
-                    .w(relative(fraction.clamp(0., 1.)))
-                    .bg(rgb(COLORS[2])),
-            )
-        })
-}
-
-fn process_panel(s: &Sample, memory: bool) -> impl IntoElement {
-    app_list::compact(s, memory)
-}
-
-fn detail(s: &Sample, tab: usize) -> impl IntoElement {
-    let (caption, value, history) = match tab {
-        1 => (
-            if cfg!(target_os = "ios") {
-                "sysmon CPU · App scope"
-            } else {
-                "Processor utilization"
-            },
-            if s.cpu_available {
-                format!("{:.0}%", s.cpu)
-            } else {
-                "Unavailable".into()
-            },
-            s.history.clone(),
-        ),
-        2 => (
-            if cfg!(target_os = "ios") {
-                "sysmon resident memory"
-            } else {
-                "Physical memory in use"
-            },
-            if s.memory_available {
-                reading(s.memory_available, gb(s.memory))
-            } else {
-                "Unavailable".into()
-            },
-            s.memory_history.clone(),
-        ),
-        3 => (
-            "Available storage",
-            if s.disk_available {
-                reading(s.disk_available, gb(s.free))
-            } else {
-                "Unavailable".into()
-            },
-            s.disk_history.clone(),
-        ),
-        _ => (
-            "Download",
-            if s.network_available {
-                reading(s.network_available, rate(s.rx))
-            } else {
-                "Unavailable".into()
-            },
-            normalized(&s.network_history),
-        ),
-    };
-    let value_size = if value == "Unavailable" { 18. } else { 36. };
-    view()
-        .gap_3()
-        .child(
-            view()
-                .bg(rgb(PANEL))
-                .rounded(px(12.))
-                .p_4()
-                .flex_row()
-                .flex_wrap()
-                .gap_4()
-                .child(
-                    view()
-                        .w(px(160.))
-                        .gap_3()
-                        .child(label(caption))
-                        .child(
-                            text(value)
-                                .text_size(px(value_size))
-                                .font_weight(FontWeight::SEMIBOLD),
-                        )
-                        .child(row("History", "Last 2 minutes"))
-                        .child(row("Refresh", "Every 2 seconds")),
-                )
-                .child(
-                    view()
-                        .flex_1()
-                        .min_w(px(220.))
-                        .child(graph(&history, COLORS[tab], true)),
-                ),
-        )
-        .child(detail_stats(s, tab))
-        .child(if tab <= 2 {
-            view().into_element()
-        } else {
-            volume_network_panel(s, tab).into_element()
-        })
-}
 fn unavailable(tab: usize) -> impl IntoElement {
     let (heading, body) = match tab {
         5 => (
@@ -564,23 +323,45 @@ pub fn App() -> impl IntoElement {
             .child(scroll().flex_1().child(dynamic(move||{
                 if !ready.get(){return view().p_5().child(label("Reading your device…")).into_element();}
                 let current=tab.get();
-                match current {
-                    0=>dynamic(move||overview(&data.get(),&extras.get(),tab).into_element()).into_element(),
-                    1..=4=>view().gap_3().child(dynamic(move||detail(&data.get(),current).into_element()))
+                let content=match current {
+                    0=>live_views::overview(data,extras,tab).into_element(),
+                    1..=4=>view().gap_3().child(live_views::detail(data,current))
                         .when(current<=2,|v|v.child(app_list::table_from_data(data,current==2))).into_element(),
                     10|11=>dynamic(move||workload_page(&data.get(),&extras.get(),current,expanded_workload).into_element()).into_element(),
                     12=>dynamic(move||container_page(&extras.get()).into_element()).into_element(),
                     5|7|8=>dynamic(move||device_page(&extras.get(),current).into_element()).into_element(),
                     9=>dynamic(move||bluetooth_page(&extras.get()).into_element()).into_element(),
                     i=>unavailable(i).into_element(),
-                }
+                };
+                motion::enter(view().w_full().child(content),0.).into_element()
             })))
             .child(view().flex_row().justify_between()
                 .child(label(if cfg!(target_os="ios"){"sysmon / app + device context"}else{"sysmon / device telemetry"}))
                 .child(label("Local by design")))))
 }
 fn nav_item(tab: Signal<usize>, index: usize, _compact: bool) -> impl IntoElement {
+    let selected = computed(move || tab.get() == index);
+    let active = animated_value(if selected.get_untracked() { 1. } else { 0. });
+    effect(move || {
+        let target = if selected.get() { 1. } else { 0. };
+        if reduce_motion() {
+            active.set(target);
+        } else {
+            let _ = active.spring(
+                target,
+                Spring {
+                    stiffness: 250.,
+                    damping: 26.,
+                    ..Default::default()
+                },
+            );
+        }
+    });
     view()
+        .relative()
+        .transition()
+        .duration(move || if reduce_motion() { 0_f32 } else { 170_f32 })
+        .ease_out()
         .flex_row()
         .items_center()
         .gap_2()
@@ -598,18 +379,40 @@ fn nav_item(tab: Signal<usize>, index: usize, _compact: bool) -> impl IntoElemen
         .label(TABS[index])
         .role(AccessibilityRole::Button)
         .on_press(move || tab.set(index))
-        .hover(|s| s.bg(rgb(0x202022)))
-        .child(dynamic(move || {
-            visuals::icon(
-                index,
-                if tab.get() == index {
-                    COLORS[index]
-                } else {
-                    MUTED
-                },
-                17.,
-            )
-        }))
+        .hover(|s| {
+            s.bg(rgb(0x202022))
+                .translate_x(move || px(if reduce_motion() { 0_f32 } else { 2_f32 }))
+        })
+        .active(|s| s.scale(move || if reduce_motion() { 1_f32 } else { 0.975_f32 }))
+        .child(
+            view()
+                .absolute()
+                .left(px(0.))
+                .top(px(7.))
+                .w(px(2.))
+                .h(px(14.))
+                .rounded_full()
+                .bg(rgb(COLORS[index]))
+                .bind_opacity(&active)
+                .bind_transform(nsh_core::TransformKind::ScaleY, &active),
+        )
+        .child(
+            view()
+                .w(px(17.))
+                .h(px(17.))
+                .bind_scale(&active.interpolate(&[0., 1.], &[1., 1.1]))
+                .child(dynamic(move || {
+                    visuals::icon(
+                        index,
+                        if tab.get() == index {
+                            COLORS[index]
+                        } else {
+                            MUTED
+                        },
+                        17.,
+                    )
+                })),
+        )
         .child(
             text(TABS[index])
                 .text_size(px(12.))
@@ -672,53 +475,23 @@ fn topbar(tab: Signal<usize>, paused: Signal<bool>) -> impl IntoElement {
         .gap_2()
         .pb_2()
         .child(
-            view()
-                .flex_1()
-                .gap_1()
-                .child(
-                    text(move || {
-                        if window().width.0 < 600. {
-                            "sysmon".into()
-                        } else if window().width.0 < 1000. {
-                            format!("sysmon / {}", TABS[tab.get()])
-                        } else if tab.get() == 0 {
-                            "Overview".into()
-                        } else {
-                            TABS[tab.get()].into()
-                        }
-                    })
-                    .text_size(px(20.))
-                    .font_weight(FontWeight::SEMIBOLD),
-                )
-                .child(dynamic(|| {
-                    if window().width.0 >= 600. {
-                        label("Live resources · local collection").into_element()
-                    } else {
-                        view().into_element()
-                    }
-                })),
+            text(move || {
+                if window().width.0 < 600. {
+                    "sysmon".into()
+                } else {
+                    format!("sysmon / {}", TABS[tab.get()])
+                }
+            })
+            .text_size(px(20.))
+            .font_weight(FontWeight::SEMIBOLD),
         )
         .child(
             view()
                 .flex_row()
                 .items_center()
-                .gap_2()
-                .child(
-                    text(move || {
-                        if paused.get() {
-                            "Ⅱ Paused"
-                        } else {
-                            if window().width.0 < 600. {
-                                "● Live"
-                            } else {
-                                "● Live · 2s"
-                            }
-                        }
-                    })
-                    .text_size(px(12.))
-                    .text_color(rgb(COLORS[0])),
-                )
-                .child(
+                .gap_3()
+                .child(motion::live_status(paused, true))
+                .child(motion::interactive(
                     view()
                         .px_3()
                         .py_2()
@@ -731,7 +504,7 @@ fn topbar(tab: Signal<usize>, paused: Signal<bool>) -> impl IntoElement {
                             text(move || if paused.get() { "Resume" } else { "Pause" })
                                 .text_size(px(12.)),
                         ),
-                ),
+                )),
         )
 }
 
@@ -794,7 +567,7 @@ fn workload_page(
    let key=format!("{}:{}:{}",tab,item.name,item.pid);let click_key=key.clone();let open=expanded.get()==key;
    let ports:Vec<_>=e.listening_ports.iter().filter(|(pid,_)|item.pids.contains(pid)).map(|(_,port)|port.clone()).collect();
    view().rounded(px(16.)).bg(rgb(if open{0x222224}else{PANEL})).p_3().gap_2()
-   .child(view().flex_row().flex_wrap().items_center().justify_between().gap_2().on_press(move||expanded.update(|v|{if *v==click_key{v.clear();}else{*v=click_key.clone();}}))
+   .child(view().flex_row().flex_wrap().items_center().justify_between().gap_2().on_press(move||{motion::layout();expanded.update(|v|{if *v==click_key{v.clear();}else{*v=click_key.clone();}});})
     .child(view().flex_row().gap_2().items_center().child(visuals::badge_icon(tab,color)).child(view().gap_1().child(title(item.name.clone(),0xf2f2f5)).child(label(item.detail.clone()))))
     .child(view().flex_row().flex_wrap().items_center().gap_2()
      .children(ports.iter().take(5).map(|port|chip(port,color)))
@@ -1232,137 +1005,4 @@ fn summary_tile(heading: &str, value: String, note: &str, color: u32) -> impl In
                 .font_weight(FontWeight::SEMIBOLD),
         )
         .child(label(note))
-}
-fn value_line(value: String) -> impl IntoElement {
-    let parts = value.rsplit_once(' ');
-    let unit = parts.filter(|(_, unit)| matches!(*unit, "%" | "GB" | "MB" | "kB/s" | "MB/s" | "W"));
-    view()
-        .flex_row()
-        .items_baseline()
-        .gap_1()
-        .py_1()
-        .child(
-            text(unit.map_or_else(|| value.clone(), |(n, _)| n.to_owned()))
-                .text_size(px(28.))
-                .font_weight(FontWeight::MEDIUM),
-        )
-        .when(unit.is_some(), |v| {
-            v.child(
-                text(unit.unwrap().1.to_owned())
-                    .text_size(px(12.))
-                    .text_color(rgb(MUTED))
-                    .font_weight(FontWeight::MEDIUM),
-            )
-        })
-}
-fn mini_chart(history: Vec<f32>, index: usize) -> impl IntoElement {
-    let width = signal(0_f32);
-    let size = history.len().div_ceil(8).max(1);
-    let points: Vec<f32> = history
-        .chunks(size)
-        .map(|chunk| chunk.iter().sum::<f32>() / chunk.len() as f32)
-        .collect();
-    canvas(move || {
-        let content = window().width.0
-            - if window().width.0 >= 1000. { 168. } else { 0. }
-            - if window().width.0 < 600. { 24. } else { 40. };
-        let card = if content < 592. {
-            content
-        } else {
-            ((content - 12.) / 2.25).max(280.)
-        };
-        let w = if width.get() > 0. {
-            width.get()
-        } else {
-            (card - 24.) * 0.48
-        }
-        .max(1.);
-        let h = 52.;
-        let color = COLORS[index];
-        let step = w / 8.;
-        let mut p = Painter::new()
-            .line_width(1.)
-            .stroke_color(rgb(0x29292c))
-            .begin_path()
-            .move_to(0., h)
-            .line_to(w, h)
-            .stroke();
-        for i in 0..2 {
-            let y = i as f32 * 26.;
-            p = p
-                .stroke_color(rgb(0x222224))
-                .begin_path()
-                .move_to(0., y)
-                .line_to(w, y)
-                .stroke();
-        }
-        let xy: Vec<_> = points
-            .iter()
-            .enumerate()
-            .map(|(i, v)| {
-                (
-                    (8 - points.len() + i) as f32 * step + step / 2.,
-                    h - (v / 100. * h).clamp(1., h),
-                )
-            })
-            .collect();
-        if index == 1 && !xy.is_empty() {
-            let first = xy[0];
-            let last = *xy.last().unwrap();
-            p = p
-                .fill_color(rgb(color).opacity(0.08))
-                .begin_path()
-                .move_to(first.0, h);
-            for &(x, y) in &xy {
-                p = p.line_to(x, y);
-            }
-            p = p
-                .line_to(last.0, h)
-                .close_path()
-                .fill()
-                .stroke_color(rgb(color))
-                .line_width(1.6)
-                .begin_path();
-            for (i, &(x, y)) in xy.iter().enumerate() {
-                p = if i == 0 {
-                    p.move_to(x, y)
-                } else {
-                    p.line_to(x, y)
-                };
-            }
-            p = p.stroke();
-        }
-        for &(x, y) in &xy {
-            if index == 4 {
-                p = p
-                    .fill_color(rgb(color))
-                    .fill_rect(x - step * 0.28, y, step * 0.56, h - y);
-            } else {
-                if index == 2 {
-                    p = p
-                        .stroke_color(rgb(color).opacity(0.25))
-                        .line_width(1.)
-                        .begin_path()
-                        .move_to(x, h)
-                        .line_to(x, y)
-                        .stroke();
-                }
-                p = p
-                    .fill_color(rgb(color))
-                    .begin_path()
-                    .arc(
-                        x,
-                        y,
-                        if index == 2 { 2.8 } else { 2.1 },
-                        0.,
-                        std::f32::consts::TAU,
-                    )
-                    .fill();
-            }
-        }
-        p
-    })
-    .w_full()
-    .h(px(56.))
-    .on_layout(move |bounds: &Bounds<Points>| width.set(bounds.size.width.0))
 }

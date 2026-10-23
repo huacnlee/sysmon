@@ -53,17 +53,7 @@ pub fn bar(tab: Signal<usize>, paused: Signal<bool>) -> impl IntoElement {
                 .items_center()
                 .gap_3()
                 .window_drag(false)
-                .child(
-                    text(move || {
-                        if paused.get() {
-                            "Ⅱ Paused"
-                        } else {
-                            "● Live · 2s"
-                        }
-                    })
-                    .text_size(px(11.))
-                    .text_color(rgb(0x49b47b)),
-                )
+                .child(crate::motion::live_status(paused, false))
                 .child(
                     view()
                         .test_id("sampling-toggle")
@@ -75,7 +65,11 @@ pub fn bar(tab: Signal<usize>, paused: Signal<bool>) -> impl IntoElement {
                         .rounded(px(6.))
                         .border_1()
                         .border_color(rgb(0x333336))
+                        .transition()
+                        .duration(move || if reduce_motion() { 0_f32 } else { 160_f32 })
+                        .ease_out()
                         .hover(|s| s.bg(rgb(0x242426)))
+                        .active(|s| s.scale(move || if reduce_motion() { 1_f32 } else { 0.96_f32 }))
                         .on_press(move || paused.update(|v| *v = !*v))
                         .child(
                             text(move || if paused.get() { "Resume" } else { "Pause" })

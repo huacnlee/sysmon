@@ -104,3 +104,29 @@ test("preserves application search and sort across live updates and opens resour
   await app.press("label:/^Close details for / >> nth=0");
   await app.waitFor("Application total across the grouped processes. CPU 100% equals one full core; shared memory pages may overlap.", { state: "gone" });
 });
+
+test("keeps reduced-motion navigation and virtualized application lists usable", async () => {
+  const app = await open(".", {
+    width: 1280, height: 800, platform: "macos", reducedMotion: true,
+  });
+  await app.waitFor("Memory by type");
+  await app.press("id:nav-CPU");
+  await app.waitFor("Processor utilization");
+  await app.waitFor("id:apps-list");
+  await app.waitFor("label:/^Open details for / >> nth=0");
+  // Bound retained cells rather than wall-clock latency: a small visible window
+  // must not turn hundreds of machine-dependent processes into native views.
+  expect(app.count("id:app-row")).toBeGreaterThan(0);
+  expect(app.count("id:app-row")).toBeLessThanOrEqual(40);
+  await app.scroll("id:apps-list", 450);
+  expect(app.count("id:app-row")).toBeGreaterThan(0);
+  expect(app.count("id:app-row")).toBeLessThanOrEqual(40);
+  await app.press("id:sort-name");
+  await app.waitFor("Name ↑");
+  await app.press("id:sampling-toggle");
+  await app.waitFor("Ⅱ Paused");
+  await app.press("id:nav-Overview");
+  await app.waitFor("Memory by type");
+  await app.press("id:sampling-toggle");
+  await app.waitFor("● Live · 2s");
+});

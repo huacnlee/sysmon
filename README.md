@@ -26,6 +26,9 @@ Run each target on a host with its platform SDK installed. The application root 
 
 ## Monitoring and limits
 
+- Live views stay mounted between samples. Application lists are virtualized, so only nearby rows are mounted while the complete dataset remains searchable and scrollable.
+- Transitions, springs, card entrances, reading updates and chart geometry run through NSH native animation bindings; there is no Rust frame loop rebuilding the interface. Reduced-motion settings are respected.
+- Charts use actual samples, gradient fills, live endpoints and pointer readouts. Memory graphs explicitly label their windowed vertical range; their time axis grows from the samples collected since launch, up to two minutes.
 - Core readings update every two seconds. Device and Docker information refresh every 30 seconds. Blocking collectors run away from the UI thread.
 - Pause freezes displayed samples. History starts at launch, holds up to 60 samples, and is not persisted. Rate measurements wait for a baseline.
 - Application lists support live search, CPU/memory/name sorting and expandable resource details.
