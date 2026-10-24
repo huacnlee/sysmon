@@ -13,7 +13,7 @@ These captures show native desktop, iOS simulator and Android emulator builds.
 After binary assets are published to a GitHub Release:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/huacnlee/sysmon/main/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/huacnlee/sysmon/main/install.sh | sh
 ```
 
 The installer supports macOS and Linux, downloads the matching architecture archive, verifies `SHA256SUMS`, and installs `sysmon` into `~/.local/bin`. Add that directory to `PATH`, then run `sysmon`. On macOS it also adds `~/Applications/sysmon.app`; on Linux it installs a desktop launcher and icon. No Rust or NSH installation is required. Linux requires GTK 4 system libraries; macOS requires macOS 14 or newer. macOS bundles are ad-hoc signed, not notarized.
