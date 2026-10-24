@@ -1,14 +1,14 @@
 [package]
 name = "sysmon"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 publish = false
 
 [workspace]
 
 [dependencies]
-nsh-core = { git = "https://github.com/longbridge/nsh", rev = "4e2d52ab5597134d445b2ede9169a68531b4296c" }
-nsh-base = { git = "https://github.com/longbridge/nsh", rev = "4e2d52ab5597134d445b2ede9169a68531b4296c" }
+nsh-core = { git = "https://github.com/longbridge/nsh", rev = "6e6c45dd0d3be288015a2c78a998c9806b4c1c89" }
+nsh-base = { git = "https://github.com/longbridge/nsh", rev = "6e6c45dd0d3be288015a2c78a998c9806b4c1c89" }
 env_logger = "0.11"
 
 [target.'cfg(not(target_os = "ios"))'.dependencies]
@@ -26,10 +26,10 @@ objc2-avf-audio = { version = "0.3.2", default-features = false, features = ["st
 libc = "0.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-nsh-platform-linux = { git = "https://github.com/longbridge/nsh", rev = "4e2d52ab5597134d445b2ede9169a68531b4296c", default-features = false }
+nsh-platform-linux = { git = "https://github.com/longbridge/nsh", rev = "6e6c45dd0d3be288015a2c78a998c9806b4c1c89", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-nsh-platform-macos = { git = "https://github.com/longbridge/nsh", rev = "4e2d52ab5597134d445b2ede9169a68531b4296c", default-features = false }
+nsh-platform-macos = { git = "https://github.com/longbridge/nsh", rev = "6e6c45dd0d3be288015a2c78a998c9806b4c1c89", default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-nsh-platform-windows = { git = "https://github.com/longbridge/nsh", rev = "4e2d52ab5597134d445b2ede9169a68531b4296c", default-features = false }
+nsh-platform-windows = { git = "https://github.com/longbridge/nsh", rev = "6e6c45dd0d3be288015a2c78a998c9806b4c1c89", default-features = false }
