@@ -51,6 +51,8 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
       - run: sdkmanager 'ndk;27.2.12479018'
       - name: Check native mobile library
         shell: bash
