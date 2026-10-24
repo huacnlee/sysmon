@@ -171,14 +171,6 @@ pub fn compact_from_data(data: Signal<Sample>, memory: bool) -> impl IntoElement
                     )
                 })),
         )
-        .child(
-            note(if memory {
-                "Resident memory · shared pages may overlap"
-            } else {
-                "CPU 100% = one core"
-            })
-            .flex_shrink_0(),
-        )
 }
 
 /// Mount this outside a region that rebuilds on every Sample. The table tracks
@@ -242,7 +234,6 @@ fn table_source(source: Rc<dyn Fn() -> Vec<AppUsage>>, memory: bool) -> impl Int
             .empty(view().py_6().gap_2()
                 .child(text(move || if query.get().is_empty(){"Application metrics unavailable"}else{"No matching applications"}).text_size(px(12.)))
                 .child(text(move || if !query.get().is_empty(){"Try a shorter name or clear the search."}else if cfg!(target_os="ios"){ "iOS does not permit inspection of other applications." }else{"No application resource readings are available yet."}).text_size(px(11.)).text_color(rgb(MUTED)))))
-        .child(note("Bars compare the visible applications. Select an application to inspect its resource totals.").flex_shrink_0())
 }
 
 /// A single inset field keeps its clear affordance in a fixed trailing slot,
@@ -467,8 +458,7 @@ fn resource_row(
             .child(view().flex_row().flex_wrap().gap(px(14.))
                 .child(live_detail("CPU",move || app.with(|item|format!("{:.1}%",item.cpu))))
                 .child(live_detail("Resident memory",move || app.with(|item|gb(item.memory))))
-                .child(live_detail("Processes",move || app.with(|item|item.processes.to_string()))))
-            .child(note("Application total across the grouped processes. CPU 100% equals one full core; shared memory pages may overlap."))))
+                .child(live_detail("Processes",move || app.with(|item|item.processes.to_string()))))))
 }
 fn live_avatar(app: Memo<AppUsage>, size: f32) -> impl IntoElement {
     view()
@@ -489,16 +479,18 @@ fn live_avatar(app: Memo<AppUsage>, size: f32) -> impl IntoElement {
 fn live_bar(fraction: Memo<f32>, color: u32) -> impl IntoElement {
     view()
         .w_full()
-        .h(px(3.))
+        .h(px(4.))
         .rounded_full()
         .bg(rgb(color).opacity(0.13))
         .overflow_hidden()
         .child(
             view()
                 .w_full()
-                .h(px(3.))
+                .h(px(4.))
                 .rounded_full()
-                .bg(rgb(color))
+                .bg_linear_to_r()
+                .gradient_from(rgb(color))
+                .gradient_to(rgb(crate::charts::gradient_end(color)))
                 .origin_left()
                 .scale_x(move || fraction.get().clamp(0., 1.))
                 .transition_transform()
@@ -583,9 +575,6 @@ mod tests {
 
 fn muted(value: impl Into<String>) -> impl IntoElement {
     text(value.into()).text_size(px(11.)).text_color(rgb(MUTED))
-}
-fn note(value: impl Into<String>) -> impl IntoElement + Styled {
-    text(value.into()).text_size(px(10.)).text_color(rgb(MUTED))
 }
 fn heading(value: impl Into<String>, color: u32) -> impl IntoElement + Styled {
     text(value.into())

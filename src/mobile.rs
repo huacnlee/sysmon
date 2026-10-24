@@ -70,7 +70,7 @@ pub fn shell(
                     nsh_base::nav_page()
                         .key("mobile-root")
                         .title(move || SECTIONS[section.get() as usize])
-                        .header_large_title(cfg!(target_os = "ios"))
+                        .header_large_title(false)
                         .header_back_title("")
                         .header_style_with(|s| {
                             s.text_color(rgb(0xeeeef1)).tint_color(rgb(0xeeeef1))
@@ -116,8 +116,7 @@ pub fn shell(
                                         .pt_2()
                                         .pb_5()
                                         .gap_3()
-                                        .child(live_views::detail(data, resource, paused))
-                                        .child(scope_note()),
+                                        .child(live_views::detail(data, resource, paused)),
                                 ),
                             )
                     },
@@ -144,7 +143,7 @@ pub fn shell(
 
 pub fn scope_note() -> impl IntoElement {
     view().bg(rgb(0x171c25)).rounded(px(8.)).p_3().gap_2()
-        .child(title("App + device context",0x8eb9f1))
+        .child(title("Data scope",0x8eb9f1))
         .child(label("CPU and resident memory describe sysmon. Storage and network describe what this app can access. The OS protects other apps; their activity is not shown."))
 }
 fn activity(data: Signal<Sample>, detail: Signal<usize>) -> impl IntoElement {
@@ -213,7 +212,6 @@ fn activity(data: Signal<Sample>, detail: Signal<usize>) -> impl IntoElement {
                         .child(text("›").text_size(px(24.)).text_color(rgb(MUTED)))
                 })),
         )
-        .child(scope_note())
 }
 fn device(data: Signal<Sample>, extras: Signal<Extras>) -> impl IntoElement {
     view().gap_4()
@@ -234,9 +232,6 @@ fn device(data: Signal<Sample>, extras: Signal<Extras>) -> impl IntoElement {
                 .child(title("App audio output",0xeeeef1)).child(text(output).text_size(px(14.))).into_element(),
             None=>view().into_element(),
         }))
-        .child(view().panel().rounded(px(8.)).p_4().gap_3()
-            .child(title("Access on this device",0xeeeef1))
-            .child(label("GPU and Neural Engine utilization, other apps, Bluetooth inventory and local Docker sessions are not exposed by this app on mobile. No elevated access is requested.")))
 }
 fn about(paused: Signal<bool>) -> impl IntoElement {
     view().gap_4()

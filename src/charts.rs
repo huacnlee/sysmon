@@ -37,6 +37,44 @@ pub struct PlotOptions {
     pub fit_height: bool,
 }
 
+fn transfer_render_kind(kind: PlotKind, units: PlotUnits) -> PlotKind {
+    if units == PlotUnits::BytesPerSecond {
+        PlotKind::Line
+    } else {
+        kind
+    }
+}
+fn secondary_segments(ages: &[f64], count: usize) -> Vec<std::ops::Range<usize>> {
+    let start = ages.len().saturating_sub(count);
+    segments(&ages[start..])
+        .into_iter()
+        .map(|range| range.start + start..range.end + start)
+        .collect()
+}
+pub(crate) fn gradient_end(color: u32) -> u32 {
+    match color {
+        0x398ef5 => 0x48d9f1, // CPU: blue to cyan.
+        0x9885ed => 0xed78c9, // Memory: violet to pink.
+        0xd89b13 => 0xf28548, // Storage: amber to orange.
+        0x20b48c => 0x43d4de, // Download: green to cyan.
+        0x559ee5 => 0xa28afa, // Upload: blue to violet.
+        0xdc5489 => 0xf3957c, // GPU: pink to coral.
+        _ => color,
+    }
+}
+
+fn slot_targets(values: &[f32]) -> [f32; CAPACITY] {
+    let values = &values[values.len().saturating_sub(CAPACITY)..];
+    let start = CAPACITY - values.len();
+    std::array::from_fn(|index| {
+        if index >= start {
+            values[index - start]
+        } else {
+            0.
+        }
+    })
+}
+
 fn observations(values: &[f32], units: PlotUnits) -> Vec<f32> {
     values[values.len().saturating_sub(CAPACITY)..]
         .iter()
@@ -238,14 +276,13 @@ pub fn plot_with_options(
         .map(|(values, _)| observations(&values.get_untracked(), options.units))
         .unwrap_or_default();
     let initial_domain = domain_for(&initial, &initial_secondary, kind, options.units);
-    let initial_targets: [f32; CAPACITY] = std::array::from_fn(|i| {
-        let start = CAPACITY - initial.len();
-        if i >= start { initial[i - start] } else { 0. }
-    });
+    let initial_targets = slot_targets(&initial);
     let samples = signal(initial);
+    let secondary_targets = slot_targets(&initial_secondary);
     let secondary_samples = signal(initial_secondary);
-    let secondary_slots: Rc<[AnimatedValue; CAPACITY]> =
-        Rc::new(std::array::from_fn(|_| animated_value(0.)));
+    let secondary_slots: Rc<[AnimatedValue; CAPACITY]> = Rc::new(std::array::from_fn(|i| {
+        animated_value(secondary_targets[i])
+    }));
     let update_secondary = secondary_slots.clone();
     let measured_width = signal(0_f32);
     let measured_height = signal(0_f32);
@@ -394,6 +431,13 @@ pub fn plot_with_options(
         let plot_h = bottom - top;
         let plot_w = right - left;
         let accent = rgb(color).to_hsla();
+        let endpoint = rgb(gradient_end(color)).to_hsla();
+        let stroke = CanvasGradient::linear(
+            Point::new(px(left), px(top)),
+            Point::new(px(right), px(top)),
+        )
+        .add_color_stop(Percentage(0.), accent)
+        .add_color_stop(Percentage(1.), endpoint);
         let mut p = Painter::new().font(if compact {
             "9px system-ui"
         } else {
@@ -482,12 +526,14 @@ pub fn plot_with_options(
                 (time_x(ages[i - first], horizon, left, right), y)
             })
             .collect();
-        let fill =
-            CanvasGradient::linear(Point::new(px(0.), px(top)), Point::new(px(0.), px(bottom)))
-                .add_color_stop(Percentage(0.), accent.opacity(0.27))
-                .add_color_stop(Percentage(0.7), accent.opacity(0.07))
-                .add_color_stop(Percentage(1.), accent.opacity(0.008));
-        match kind {
+        let fill = CanvasGradient::linear(
+            Point::new(px(left), px(top)),
+            Point::new(px(right), px(bottom)),
+        )
+        .add_color_stop(Percentage(0.), accent.opacity(0.24))
+        .add_color_stop(Percentage(0.55), endpoint.opacity(0.10))
+        .add_color_stop(Percentage(1.), endpoint.opacity(0.012));
+        match transfer_render_kind(kind, options.units) {
             PlotKind::Line | PlotKind::Memory => {
                 for range in segments(&ages) {
                     let points = &xy[range];
@@ -502,9 +548,9 @@ pub fn plot_with_options(
                         .line_to(points.last().unwrap().0, bottom)
                         .close_path()
                         .fill();
-                    for (width, alpha) in [(5_f32, 0.08_f32), (1.75, 0.98)] {
+                    for width in [2.75_f32] {
                         p = p
-                            .stroke_color(accent.opacity(alpha))
+                            .stroke_style(stroke.clone())
                             .line_width(width)
                             .line_cap(LineCap::Round)
                             .line_join(LineJoin::Round)
@@ -528,7 +574,7 @@ pub fn plot_with_options(
                     p = p
                         .save()
                         .global_alpha(&alpha)
-                        .stroke_color(accent)
+                        .stroke_color(endpoint)
                         .line_width(1.)
                         .begin_path()
                         .arc(*x, y, &ring, 0., std::f32::consts::TAU)
@@ -540,9 +586,9 @@ pub fn plot_with_options(
                     .begin_path()
                     .arc(*x, y, 4., 0., std::f32::consts::TAU)
                     .fill()
-                    .fill_color(accent)
+                    .fill_color(endpoint)
                     .begin_path()
-                    .arc(*x, y, 2.5, 0., std::f32::consts::TAU)
+                    .arc(*x, y, 3., 0., std::f32::consts::TAU)
                     .fill();
             }
             PlotKind::Bars => {
@@ -568,28 +614,48 @@ pub fn plot_with_options(
         if let Some((_, second_color)) = options.secondary {
             let second_count = secondary.len().min(count);
             if second_count > 0 {
+                let second_stroke = CanvasGradient::linear(
+                    Point::new(px(left), px(top)),
+                    Point::new(px(right), px(top)),
+                )
+                .add_color_stop(Percentage(0.), rgb(second_color))
+                .add_color_stop(Percentage(1.), rgb(gradient_end(second_color)));
                 p = p
-                    .stroke_color(rgb(second_color))
-                    .line_width(1.6)
+                    .stroke_style(second_stroke)
+                    .line_width(2.5)
                     .line_cap(LineCap::Round)
                     .line_join(LineJoin::Round)
                     .begin_path();
                 let second_first = CAPACITY - secondary.len();
-                for offset in 0..second_count {
-                    let index = secondary.len() - second_count + offset;
-                    let at = count - second_count + offset;
-                    let fraction = secondary_slots[second_first + index]
-                        .sub(&domain_low)
-                        .div(&domain_high.sub(&domain_low));
-                    let y = fraction.interpolate(&[0., 1.], &[bottom, top]);
-                    let x = time_x(ages[at], horizon, left, right);
-                    p = if offset == 0 || ages[at - 1] - ages[at] > 6. {
-                        p.move_to(x, &y)
-                    } else {
-                        p.line_to(x, &y)
-                    };
+                for range in secondary_segments(&ages, second_count) {
+                    for at in range.clone() {
+                        let index = secondary.len() + at - count;
+                        let fraction = secondary_slots[second_first + index]
+                            .sub(&domain_low)
+                            .div(&domain_high.sub(&domain_low));
+                        let y = fraction.interpolate(&[0., 1.], &[bottom, top]);
+                        let x = time_x(ages[at], horizon, left, right);
+                        p = if at == range.start {
+                            p.move_to(x, &y)
+                        } else {
+                            p.line_to(x, &y)
+                        };
+                    }
                 }
                 p = p.stroke();
+                let end_fraction = secondary_slots[CAPACITY - 1]
+                    .sub(&domain_low)
+                    .div(&domain_high.sub(&domain_low));
+                let end_y = end_fraction.interpolate(&[0., 1.], &[bottom, top]);
+                p = p
+                    .fill_color(rgb(0x141416))
+                    .begin_path()
+                    .arc(right, &end_y, 4., 0., std::f32::consts::TAU)
+                    .fill()
+                    .fill_color(rgb(gradient_end(second_color)))
+                    .begin_path()
+                    .arc(right, &end_y, 2.8, 0., std::f32::consts::TAU)
+                    .fill();
             }
         }
         let selected = cursor.get().map(|i| i.clamp(first, CAPACITY - 1));
@@ -693,23 +759,39 @@ pub fn plot_with_options(
                 p = p.fill_text(line, tip_x + 4., baseline);
             }
         } else if !compact {
-            p = p.font("10px system-ui").fill_color(accent).fill_text(
-                if options.units == PlotUnits::BytesPerSecond {
-                    if options.secondary.is_some() {
-                        "↓ DOWNLOAD  ↑ UPLOAD"
-                    } else {
+            let font = "10px system-ui";
+            if options.units == PlotUnits::BytesPerSecond && options.secondary.is_some() {
+                let second_color = options.secondary.unwrap().1;
+                let (mut rx, mut tx) = ("↓ DOWNLOAD", "↑ UPLOAD");
+                let available = (w - 16.).max(0.);
+                let gap = 12.;
+                if measure_text(font, rx).0 + gap + measure_text(font, tx).0 > available {
+                    (rx, tx) = ("↓ RX", "↑ TX");
+                }
+                let rx_width = measure_text(font, rx).0;
+                let total = rx_width + gap + measure_text(font, tx).0;
+                let start = if total <= plot_w - 6. { left + 3. } else { 8. };
+                p = p
+                    .font(font)
+                    .fill_color(accent)
+                    .fill_text(rx, start, top - 6.)
+                    .fill_color(rgb(gradient_end(second_color)))
+                    .fill_text(tx, start + rx_width + gap, top - 6.);
+            } else {
+                p = p.font(font).fill_color(accent).fill_text(
+                    if options.units == PlotUnits::BytesPerSecond {
                         "TRANSFER RATE"
-                    }
-                } else if kind == PlotKind::Bars {
-                    "RELATIVE TRANSFER"
-                } else if kind == PlotKind::Memory {
-                    "WINDOWED MEMORY %"
-                } else {
-                    "UTILIZATION %"
-                },
-                left + 3.,
-                top - 6.,
-            );
+                    } else if kind == PlotKind::Bars {
+                        "RELATIVE TRANSFER"
+                    } else if kind == PlotKind::Memory {
+                        "WINDOWED MEMORY %"
+                    } else {
+                        "UTILIZATION %"
+                    },
+                    left + 3.,
+                    top - 6.,
+                );
+            }
         }
         p
     })
@@ -772,6 +854,37 @@ pub fn plot_with_options(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mounted_upload_trace_starts_at_observed_values_without_waiting_for_another_capture() {
+        let slots = slot_targets(&[1024., 0., 2048.]);
+        assert_eq!(&slots[CAPACITY - 3..], &[1024., 0., 2048.]);
+    }
+    #[test]
+    fn upload_trace_does_not_break_at_idle_or_normal_capture_jitter() {
+        let ages = sample_ages(&[10., 12.1, 14., 16.3, 18.2], 5);
+        assert_eq!(secondary_segments(&ages, 5), vec![0..5]);
+        assert_eq!(secondary_segments(&ages, 3), vec![2..5]);
+        assert!(secondary_segments(&ages, 0).is_empty());
+        let outage = sample_ages(&[10., 12., 14., 28., 30.], 5);
+        assert_eq!(secondary_segments(&outage, 5), vec![0..3, 3..5]);
+        // Unequal vectors stay aligned to their actual shared newest window.
+        assert_eq!(secondary_segments(&outage, 3), vec![2..3, 3..5]);
+        assert_eq!(secondary_segments(&outage, 1), vec![4..5]);
+    }
+    #[test]
+    fn network_observations_keep_a_continuous_trace_through_observed_idle() {
+        // A real zero observation is a measured idle interval, not missing data.
+        // The actual network caller requests Bars with BytesPerSecond units.
+        let rates = observations(&[1024., 0., 2048.], PlotUnits::BytesPerSecond);
+        let ages = sample_ages(&[10., 12., 14.], rates.len());
+        assert_eq!(rates.len(), 3);
+        assert_eq!(segments(&ages), vec![0..3]);
+        assert_eq!(
+            transfer_render_kind(PlotKind::Bars, PlotUnits::BytesPerSecond),
+            PlotKind::Line,
+            "Network RX currently draws disconnected bars and drops zero-rate observations instead of a continuous measured trace"
+        );
+    }
     #[test]
     fn allocated_chart_height_preserves_axis_and_minimum_trace_region() {
         for height in [64_f32, 80., 94., 154., 176., 320., 640.] {

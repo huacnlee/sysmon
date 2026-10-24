@@ -7,7 +7,7 @@ on:
       version:
         description: Version to build (without v)
         required: true
-        default: '0.1.2'
+        default: '0.1.3'
 permissions:
   contents: read
 concurrency:
@@ -40,6 +40,8 @@ jobs:
             ~/.cargo/git
             target
           key: release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            release-${{ runner.os }}-${{ runner.arch }}-
       - name: Installer regression tests
         run: python -B -m unittest discover -s tests -p 'test_*.py' -v
       - name: Build native package

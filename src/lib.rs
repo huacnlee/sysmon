@@ -557,11 +557,6 @@ fn workload_page(
                 ))
                 .into_element()
         })))
-        .when(tab == 11, |v| {
-            v.child(label(
-                "Local sessions only · account quotas and token counts are not collected.",
-            ))
-        })
         .child(
             view()
                 .panel()
@@ -705,10 +700,7 @@ fn workload_rows(
                                         .iter()
                                         .map(|pid| chip(&format!("PID {}", pid), MUTED)),
                                 ),
-                            )
-                            .child(label(
-                                "CPU activity alone does not determine whether a server is idle.",
-                            )),
+                            ),
                     )
                 })
         }))
@@ -878,7 +870,7 @@ fn device_page(e: &providers::Extras, tab: usize) -> impl IntoElement {
   .child(summary_tile("Power draw",e.battery.as_ref().and_then(|b|b.power_w).map(|v|format!("{:.1} W",v)).unwrap_or_else(||"Unavailable".into()),"Reported battery power",COLORS[7]))))
  .when(tab==7,|v|v.child(view().border_1().border_color(rgb(0x404046)).rounded(px(8.)).p_3().gap_2()
   .child(row("Cycle count",e.battery.as_ref().and_then(|b|b.cycles).map(|v|v.to_string()).unwrap_or_else(||"Unavailable".into())))
-  .child(label("Unavailable fields are not exposed by this device or its current power provider."))))
+ ))
 }
 
 #[cfg(any(target_os = "ios", target_os = "android"))]
@@ -1054,11 +1046,6 @@ fn volume_network_panel(data: Signal<Sample>, tab: usize) -> impl IntoElement {
                 .into_element()
         } else {
             view().child(rows).into_element()
-        })
-        .when(cfg!(target_os = "ios"), |v| {
-            v.child(label(
-                "iOS exposes only sandbox-visible volume and interface information.",
-            ))
         })
 }
 

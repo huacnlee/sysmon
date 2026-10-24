@@ -79,8 +79,8 @@ fn card(
                 .when(is_desktop(), |v| v.flex_1().min_h(px(0.)))
                 .panel()
                 .rounded(px(8.))
-                .p(px(10.))
-                .gap_2()
+                .p(px(8.))
+                .gap(px(6.))
                 .on_press(move || tab.set(index))
                 .child(
                     view()
@@ -100,29 +100,29 @@ fn card(
                 .child(
                     view()
                         .when(is_desktop(), |v| v.flex_1().min_h(px(0.)))
-                        .when(is_desktop() || window().width.0 >= 360., |v| {
-                            v.flex_row().items_center()
-                        })
-                        .gap_2()
+                        .gap(px(6.))
                         .child(
                             view()
-                                .when(is_desktop() || window().width.0 >= 360., |v| v.flex_1())
-                                .min_w(px(140.))
-                                .gap_1()
+                                .flex_row()
+                                .items_end()
+                                .justify_between()
+                                .flex_shrink_0()
+                                .gap_2()
                                 .child(motion::metric(value))
-                                .child(text(note).text_size(px(11.)).text_color(rgb(MUTED))),
+                                .child(
+                                    text(note)
+                                        .flex_1()
+                                        .min_w(px(0.))
+                                        .text_right()
+                                        .text_size(px(11.))
+                                        .text_color(rgb(MUTED)),
+                                ),
                         )
                         .child(
                             view()
-                                .w(move || {
-                                    relative(if !is_desktop() && window().width.0 < 360. {
-                                        1.
-                                    } else {
-                                        0.54
-                                    })
-                                })
-                                .min_w(px(120.))
-                                .when(is_desktop(), |v| v.h_full().min_h(px(0.)))
+                                .w_full()
+                                .min_w(px(0.))
+                                .when(is_desktop(), |v| v.flex_1().min_h(px(0.)))
                                 .child(charts::plot_with_options(
                                     values,
                                     COLORS[index],
@@ -186,6 +186,7 @@ pub fn overview(
                 .child(
                     view()
                         .flex_1()
+                        .flex_grow(1.35)
                         .min_w(px(0.))
                         .min_h(px(0.))
                         .gap_2()
@@ -255,7 +256,6 @@ pub fn overview(
                 .child(
                     view()
                         .flex_1()
-                        .flex_grow(1.12)
                         .min_w(px(0.))
                         .min_h(px(0.))
                         .inline_style(move || {
@@ -308,7 +308,9 @@ pub fn overview(
                                                 .h(px(6.))
                                                 .w_full()
                                                 .origin_left()
-                                                .bg(rgb(COLORS[2]))
+                                                .bg_linear_to_r()
+                                                .gradient_from(rgb(COLORS[2]))
+                                                .gradient_to(rgb(charts::gradient_end(COLORS[2])))
                                                 .bind_transform(
                                                     nsh_core::TransformKind::ScaleX,
                                                     &used,
@@ -633,7 +635,6 @@ pub fn mobile_overview(
                     .text_size(px(14.)),
                 ),
         )
-        .child(crate::mobile::scope_note())
 }
 
 /// Driver activity is independent of the slower hardware-identity provider.
