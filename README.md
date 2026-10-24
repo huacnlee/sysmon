@@ -20,7 +20,7 @@ curl -sSL https://raw.githubusercontent.com/huacnlee/sysmon/main/install.sh | sh
 
 The installer supports macOS and Linux, downloads the matching architecture archive, verifies `SHA256SUMS`, and installs `sysmon` into `~/.local/bin`. Add that directory to `PATH`, then run `sysmon`. On macOS it also adds `~/Applications/sysmon.app`; on Linux it installs a desktop launcher and icon. No Rust or NSH installation is required. Linux requires GTK 4 system libraries; macOS requires macOS 14 or newer. macOS bundles are ad-hoc signed, not notarized.
 
-Run the same command to upgrade. To pin a release, download the script and run `sh install.sh v0.1.4`. Optional environment variables: `SYSMON_VERSION`, `SYSMON_INSTALL_DIR`, `SYSMON_BIN_DIR`, and `SYSMON_APPS_DIR`. Windows and mobile builds use the platform-specific commands below; this shell installer covers macOS and Linux only.
+Run the same command to upgrade. To pin a release, download the script and run `sh install.sh v0.1.5`. Optional environment variables: `SYSMON_VERSION`, `SYSMON_INSTALL_DIR`, `SYSMON_BIN_DIR`, and `SYSMON_APPS_DIR`. Windows and mobile builds use the platform-specific commands below; this shell installer covers macOS and Linux only.
 
 Release archives must exist for your OS and CPU architecture. The release workflow builds native packages on `macos-15` and `ubuntu-24.04`; manual workflow runs produce downloadable CI artifacts without publishing a release. Existing source-only releases cannot be installed with this command until binary assets and checksums have been attached.
 
@@ -28,7 +28,7 @@ To build an archive locally (Python 3.11+, Rust and platform SDK required):
 
 ```sh
 python3 -m unittest discover -s tests -p 'test_*.py' -v
-python3 scripts/build-release.py --version 0.1.4
+python3 scripts/build-release.py --version 0.1.5
 ```
 
 Archives appear in `.nsh/dist`. Pushing a matching version tag builds both platforms, runs installer and Rust tests, and publishes archives with `SHA256SUMS` to GitHub Releases. The requested version must match both `Cargo.toml` and `nsh.json`.
