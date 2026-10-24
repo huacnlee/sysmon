@@ -2,6 +2,8 @@
 
 A native system monitor for Windows, macOS, Linux, iOS and Android, built with Rust and NSH. It brings live resource readings, application activity and local developer workloads into one workspace. Desktop navigation lives in a custom draggable TitleBar with native window controls, persistent CPU/GPU/memory/disk I/O indicators, and a popup menu for additional destinations. The default desktop window is 1120 × 760. Desktop pages fill the window; application, volume and workload lists scroll inside their panels. iOS and Android use their native bottom tab bars with Overview, Activity, Device and About destinations; resource details have back navigation and touch inspection.
 
+<img width="1232" height="872" alt="image" src="https://github.com/user-attachments/assets/8593d5b9-c861-49f5-b580-d951fa833053" />
+
 ## Screenshots
 
 [Desktop](docs/screenshots/desktop.png) · [iOS simulator](docs/screenshots/mobile.png) · [Android emulator](docs/screenshots/android.png)
