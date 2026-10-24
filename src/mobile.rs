@@ -53,8 +53,8 @@ pub fn shell(
         ]
     };
     nsh_base::safe_area_view()
-        // Content owns the top safe area; the native TabBar owns the bottom inset.
-        .edges(vec![nsh_base::Edge::Top, nsh_base::Edge::Left, nsh_base::Edge::Right])
+        // Native navigation owns the top inset; the TabBar owns the bottom inset.
+        .edges(vec![nsh_base::Edge::Left, nsh_base::Edge::Right])
         .flex_1()
         .w_full()
         .h_full()
@@ -69,7 +69,8 @@ pub fn shell(
                     nsh_base::nav_page()
                         .key("mobile-root")
                         .title(move || SECTIONS[section.get() as usize])
-                        .header_visible(false)
+                        .header_visible(true)
+                        .header_large_title(false)
                         .header_back_title("")
                         .header_style_with(|s| {
                             s.text_color(rgb(0xeeeef1)).tint_color(rgb(0xeeeef1))
@@ -102,7 +103,8 @@ pub fn shell(
                         nsh_base::nav_page()
                             .key(format!("mobile-resource-{resource}"))
                             .title(resource_title(resource))
-                            .header_visible(false)
+                            .header_visible(true)
+                            .header_large_title(false)
                             .header_style_with(|s| {
                                 s.text_color(rgb(0xeeeef1)).tint_color(rgb(0xeeeef1))
                             })
@@ -115,7 +117,6 @@ pub fn shell(
                                         .pt_2()
                                         .pb_5()
                                         .gap_3()
-                                        .child(detail_back(resource, detail))
                                         .child(live_views::detail(data, resource, paused)),
                                 ),
                             )
@@ -143,19 +144,6 @@ pub fn shell(
 
 fn resource_title(resource: usize) -> &'static str {
     if resource == 3 { "Storage" } else { crate::TABS[resource] }
-}
-
-// This row belongs to the scroll content, leaving every chart free to reach the
-// status safe area. The native stack still owns screen lifecycle and system back.
-fn detail_back(resource: usize, detail: Signal<usize>) -> impl IntoElement {
-    view().h(px(40.)).flex_row().items_center().gap_3()
-        .child(view().w(px(40.)).h(px(40.)).rounded(px(20.))
-            .bg(rgb(0x242426)).items_center().justify_center()
-            .role(AccessibilityRole::Button).label("Back")
-            .test_id("mobile-detail-back")
-            .on_press(move || detail.set(0))
-            .child(text("‹").text_size(px(30.)).text_color(rgb(0xeeeef1))))
-        .child(title(resource_title(resource), 0xeeeef1))
 }
 
 pub fn scope_note() -> impl IntoElement {

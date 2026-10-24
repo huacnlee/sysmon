@@ -2,7 +2,7 @@
   "name": "sysmon",
   "id": "dev.sysmon.app",
   "version": "0.1.4",
-  "build": 5,
+  "build": 6,
   "rust": ".",
   "root": "App",
   "appearance": "dark",
