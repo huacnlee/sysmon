@@ -30,6 +30,9 @@ pub struct Container {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Extras {
     pub battery: Option<Battery>,
+    pub battery_status: String,
+    pub device_model: Option<String>,
+    pub os_version: Option<String>,
     pub gpu: Option<String>,
     pub sound: Option<String>,
     pub containers: Vec<Container>,
@@ -56,11 +59,18 @@ pub fn collect() -> Extras {
             bluetooth,
             bluetooth_status,
             listening_ports: listening_ports(),
+            ..Extras::default()
         }
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
+        let device = crate::mobile_device::collect();
         Extras {
+            battery: device.battery,
+            battery_status: device.battery_status,
+            sound: device.sound,
+            device_model: device.model,
+            os_version: device.os_version,
             container_status: "Local Docker telemetry is unavailable on this platform.".into(),
             bluetooth_status:
                 "Bluetooth device access requires a platform permission provider on this device."
@@ -763,9 +773,18 @@ fn parse_containers(listing: &str, stats: Option<&str>) -> Vec<Container> {
                 })
                 .map(|s| s.splitn(4, '\t').collect::<Vec<_>>());
             let stat_field = |i: usize| stat.as_ref().and_then(|s| s.get(i)).copied().unwrap_or("");
-            let memory_numbers = stat_field(2)
+            let parsed_memory = stat_field(2)
                 .split_once('/')
                 .and_then(|(used, limit)| parse_bytes(used).zip(parse_bytes(limit)));
+            // Docker reports 0B / 0B (including 0% CPU) before it has usable
+            // statistics for restarting containers. This is not idle activity.
+            let placeholder = parsed_memory.is_some_and(|(_, limit)| limit == 0);
+            let memory_numbers = parsed_memory.filter(|(_, limit)| *limit > 0);
+            let cpu_number = stat_field(1)
+                .trim()
+                .strip_suffix('%')
+                .and_then(|percent| percent.trim().parse::<f32>().ok())
+                .filter(|value| value.is_finite() && *value >= 0. && !placeholder);
             let network_numbers = stat_field(3)
                 .split_once('/')
                 .and_then(|(rx, tx)| parse_bytes(rx).zip(parse_bytes(tx)));
@@ -779,29 +798,22 @@ fn parse_containers(listing: &str, stats: Option<&str>) -> Vec<Container> {
                 status: fields.get(5).copied().unwrap_or("Running").to_owned(),
                 memory_used: memory_numbers.map_or(0, |m| m.0),
                 memory_limit: memory_numbers.map_or(0, |m| m.1),
-                cpu_percent: stat_field(1)
-                    .trim_end_matches('%')
-                    .parse::<f32>()
-                    .ok()
-                    .filter(|v| v.is_finite() && *v >= 0.0)
-                    .unwrap_or(0.0),
+                cpu_percent: cpu_number.unwrap_or(0.0),
                 network_rx: network_numbers.map_or(0, |n| n.0),
                 network_tx: network_numbers.map_or(0, |n| n.1),
                 name: fields[1].to_owned(),
                 image: fields[2].to_owned(),
                 ports: fields.get(3).copied().unwrap_or("").to_owned(),
-                cpu: stat
-                    .as_ref()
-                    .and_then(|s| s.get(1))
-                    .copied()
-                    .unwrap_or("Unavailable")
-                    .to_owned(),
-                memory: stat
-                    .as_ref()
-                    .and_then(|s| s.get(2))
-                    .copied()
-                    .unwrap_or("Unavailable")
-                    .to_owned(),
+                cpu: if cpu_number.is_some() {
+                    stat_field(1).to_owned()
+                } else {
+                    "Unavailable".into()
+                },
+                memory: if memory_numbers.is_some() {
+                    stat_field(2).to_owned()
+                } else {
+                    "Unavailable".into()
+                },
             })
         })
         .collect()
@@ -978,6 +990,50 @@ mod tests {
         assert_eq!(parse_bytes("Not available"), None);
         assert_eq!(parse_bytes("NaNB"), None);
     }
+    #[test]
+    fn docker_placeholder_stats_do_not_report_successful_zero_activity() {
+        let listing = "aaa\trestarting\tpostgres:16\t\tstorefront\tRestarting (1) 10 seconds ago";
+        for usage in ["0B / 0B", "0 B / 0 B", "0MiB / 0GiB", "128MiB / 0B"] {
+            let stats = format!("aaa\t0.00%\t{usage}\t0B / 0B");
+            let result = parse_containers(listing, Some(&stats));
+            let container = &result[0];
+            assert_eq!(container.memory, "Unavailable", "{usage}");
+            assert_eq!(container.cpu, "Unavailable", "{usage}");
+            assert_eq!(container.cpu_percent, 0.);
+            assert_eq!((container.memory_used, container.memory_limit), (0, 0));
+            assert!(container.status.starts_with("Restarting"));
+        }
+        // A genuine zero with an observed positive limit remains reportable.
+        let result = parse_containers(listing, Some("aaa\t0.00%\t0B / 2GiB\t0B / 0B"));
+        assert_eq!(result[0].cpu, "0.00%");
+        assert_eq!(result[0].memory, "0B / 2GiB");
+        assert_eq!(result[0].memory_used, 0);
+        assert_eq!(result[0].memory_limit, 2 * 1024 * 1024 * 1024);
+    }
+
+    #[test]
+    fn docker_invalid_percent_and_memory_fields_are_unavailable() {
+        let listing = "aaa\tpostgres\tpostgres:16";
+        for percent in ["", "NaN%", "inf%", "-1.0%", "bad%", "10", "10%%"] {
+            let stats = format!("aaa\t{percent}\t312MiB / 2GiB\t0B / 0B");
+            let result = parse_containers(listing, Some(&stats));
+            assert_eq!(result[0].cpu, "Unavailable", "{percent}");
+            assert_eq!(result[0].cpu_percent, 0.);
+            assert_eq!(result[0].memory, "312MiB / 2GiB");
+        }
+        for usage in ["", "--", "NaNB / 2GiB", "312MiB /", "-1B / 2GiB"] {
+            let stats = format!("aaa\t125.50%\t{usage}\t0B / 0B");
+            let result = parse_containers(listing, Some(&stats));
+            assert_eq!(result[0].memory, "Unavailable", "{usage}");
+            assert_eq!((result[0].memory_used, result[0].memory_limit), (0, 0));
+            assert_eq!(result[0].cpu, "125.50%");
+            assert_eq!(result[0].cpu_percent, 125.5);
+        }
+        let incomplete = parse_containers(listing, Some("aaa\t\t"));
+        assert_eq!(incomplete[0].cpu, "Unavailable");
+        assert_eq!(incomplete[0].memory, "Unavailable");
+    }
+
     #[test]
     fn battery_estimation_and_signed_current_are_not_fabricated() {
         assert!(

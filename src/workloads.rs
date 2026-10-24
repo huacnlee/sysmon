@@ -74,14 +74,6 @@ pub fn collect(system: &sysinfo::System) -> Workloads {
     aggregate(observations)
 }
 
-pub fn scope_note() -> &'static str {
-    if cfg!(any(target_os = "ios", target_os = "android")) {
-        "This operating system restricts discovery of other apps' projects and agent sessions."
-    } else {
-        "Local processes only. Account quotas and session state are not exposed by process discovery."
-    }
-}
-
 fn executable_name(name: &str) -> String {
     name.rsplit(['/', '\\'])
         .next()

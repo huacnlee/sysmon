@@ -922,6 +922,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
 
 [[package]]
+name = "httpdate"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
+
+[[package]]
 name = "icu_collections"
 version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1307,8 +1313,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 [[package]]
 name = "nsh-base"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81d4b03b672e0096c573cb9c9bd09a7688ef9292d831df5f030b7aeab40c7463"
+source = "git+https://github.com/longbridge/nsh?rev=4e2d52ab5597134d445b2ede9169a68531b4296c#4e2d52ab5597134d445b2ede9169a68531b4296c"
 dependencies = [
  "html5ever",
  "log",
@@ -1326,12 +1331,14 @@ dependencies = [
 [[package]]
 name = "nsh-core"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e35fbe379279f7dae1b9abc36dfc16b2857916daa3a1d1ad62b02fa4e74fae97"
+source = "git+https://github.com/longbridge/nsh?rev=4e2d52ab5597134d445b2ede9169a68531b4296c#4e2d52ab5597134d445b2ede9169a68531b4296c"
 dependencies = [
  "cap-std",
+ "crc32fast",
  "flate2",
  "futures-util",
+ "httpdate",
+ "imagesize 0.15.0",
  "libc",
  "log",
  "nsh-macros",
@@ -1339,10 +1346,12 @@ dependencies = [
  "rustc-hash",
  "serde",
  "serde_json",
+ "sha2",
  "slab",
  "taffy",
  "tokio",
  "tokio-tungstenite",
+ "unicode-linebreak",
  "url",
  "windows-sys 0.61.2",
 ]
@@ -1350,8 +1359,7 @@ dependencies = [
 [[package]]
 name = "nsh-engine"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bea66a12d37b00e0877d9fb78a7ca5767e40311a8236e8e867f8e7d3763ed22d"
+source = "git+https://github.com/longbridge/nsh?rev=4e2d52ab5597134d445b2ede9169a68531b4296c#4e2d52ab5597134d445b2ede9169a68531b4296c"
 dependencies = [
  "crossbeam-channel",
  "libc",
@@ -1366,8 +1374,7 @@ dependencies = [
 [[package]]
 name = "nsh-macros"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6ced9baa9a6182cddb37faaf2dc1d93383532eedac7d8edb70e28d1fc45aa29"
+source = "git+https://github.com/longbridge/nsh?rev=4e2d52ab5597134d445b2ede9169a68531b4296c#4e2d52ab5597134d445b2ede9169a68531b4296c"
 dependencies = [
  "imagesize 0.15.0",
  "proc-macro2",
@@ -1379,8 +1386,7 @@ dependencies = [
 [[package]]
 name = "nsh-platform-linux"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af999d039b0447370576ef891a5c8b1dac2927c4c14629eb2bd2a1c522698df1"
+source = "git+https://github.com/longbridge/nsh?rev=4e2d52ab5597134d445b2ede9169a68531b4296c#4e2d52ab5597134d445b2ede9169a68531b4296c"
 dependencies = [
  "crossbeam-channel",
  "gtk4",
@@ -1400,8 +1406,7 @@ dependencies = [
 [[package]]
 name = "nsh-platform-macos"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39d36bad807900a4a13c5635f6ba80f808c50639ed1f186ff297b196dc90bc56"
+source = "git+https://github.com/longbridge/nsh?rev=4e2d52ab5597134d445b2ede9169a68531b4296c#4e2d52ab5597134d445b2ede9169a68531b4296c"
 dependencies = [
  "block2",
  "crossbeam-channel",
@@ -1427,10 +1432,8 @@ dependencies = [
 [[package]]
 name = "nsh-platform-windows"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be41ccdd0de167829fe33e7f8149b798b58914fb2430ac60fb0f6284a7133098"
+source = "git+https://github.com/longbridge/nsh?rev=4e2d52ab5597134d445b2ede9169a68531b4296c#4e2d52ab5597134d445b2ede9169a68531b4296c"
 dependencies = [
- "base64 0.22.1",
  "crossbeam-channel",
  "image",
  "log",
@@ -1488,6 +1491,16 @@ dependencies = [
  "objc2-core-graphics",
  "objc2-foundation",
  "objc2-quartz-core",
+]
+
+[[package]]
+name = "objc2-avf-audio"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13a380031deed8e99db00065c45937da434ca987c034e13b87e4441f9e4090be"
+dependencies = [
+ "objc2",
+ "objc2-foundation",
 ]
 
 [[package]]
@@ -1584,6 +1597,16 @@ dependencies = [
  "objc2",
  "objc2-core-foundation",
  "objc2-core-graphics",
+ "objc2-foundation",
+]
+
+[[package]]
+name = "objc2-ui-kit"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d87d638e33c06f577498cbcc50491496a3ed4246998a7fbba7ccb98b1e7eab22"
+dependencies = [
+ "objc2",
  "objc2-foundation",
 ]
 
@@ -2137,6 +2160,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha2"
+version = "0.10.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "digest",
+]
+
+[[package]]
 name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2317,8 +2351,9 @@ dependencies = [
 
 [[package]]
 name = "sysmon"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
+ "dispatch2",
  "env_logger",
  "libc",
  "nsh-base",
@@ -2326,6 +2361,8 @@ dependencies = [
  "nsh-platform-linux",
  "nsh-platform-macos",
  "nsh-platform-windows",
+ "objc2-avf-audio",
+ "objc2-ui-kit",
  "sysinfo",
 ]
 
@@ -2582,6 +2619,12 @@ name = "unicode-ident"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
+
+[[package]]
+name = "unicode-linebreak"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b09c83c3c29d37506a3e260c08c03743a6bb66a9cd432c6934ab501a190571f"
 
 [[package]]
 name = "untrusted"

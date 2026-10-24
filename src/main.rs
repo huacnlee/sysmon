@@ -27,7 +27,7 @@ fn main() -> std::process::ExitCode {
             title: "sysmon".to_owned(),
             appearance: nsh_core::platform::Appearance::Dark,
             app_id: "dev.sysmon.app".to_owned(),
-            size: (1080, 760),
+            size: (1120, 760),
             ..Default::default()
         },
     )

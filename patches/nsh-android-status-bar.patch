@@ -1,0 +1,31 @@
+--- a/java/com/longbridge/nsh/Mounter.java
++++ b/java/com/longbridge/nsh/Mounter.java
+@@ -73,6 +73,14 @@
+         if (appearance != 0) return appearance == 2;
+         return (context.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                 == android.content.res.Configuration.UI_MODE_NIGHT_YES;
++    }
++
++    /** Restore the app's status bar after the Activity updates system defaults. */
++    void reapplySystemBars() {
++        if (barStyle < 0) return;
++        boolean dark = night();
++        SystemUi.statusBar(context, barStyle, barHidden, dark);
++        for (ModalHost modal : shownModals) modal.statusBar(barStyle, barHidden, dark);
+     }
+ 
+     /** A screen's options (`encode.rs` `screen_config`). */
+--- a/java/com/longbridge/nsh/NshView.java
++++ b/java/com/longbridge/nsh/NshView.java
+@@ -601,6 +601,11 @@
+     protected void onConfigurationChanged(Configuration config) {
+         super.onConfigurationChanged(config);
+         publishEnvironment(getRootWindowInsets());
++        // AppActivity resets bars after dispatching this callback. Restore the
++        // cached app/page/dialog setting once that callback has returned.
++        post(() -> {
++            if (handle != 0 && isAttachedToWindow()) mounter.reapplySystemBars();
++        });
+     }
+ 
+     private static Window windowOf(Context context) {

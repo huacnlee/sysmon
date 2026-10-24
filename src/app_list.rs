@@ -1,10 +1,11 @@
 //! Application resource lists. Search, ordering and expanded details live outside
 //! the sample-dependent region so a live refresh does not reset the controls.
+use crate::PanelSurface;
 use nsh_core::ui::prelude::*;
 use nsh_core::{LayoutAnimation, LayoutCurve, LayoutTransition};
 use std::rc::Rc;
 
-use crate::{COLORS, MUTED, PANEL, Sample, apps::AppUsage, gb};
+use crate::{COLORS, MUTED, Sample, apps::AppUsage, gb};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Order {
@@ -75,19 +76,24 @@ pub fn compact_from_data(data: Signal<Sample>, memory: bool) -> impl IntoElement
     });
     view()
         .w_full()
-        .min_w(px(260.))
-        .bg(rgb(PANEL))
-        .rounded(px(16.))
+        .flex_1()
+        .min_h(px(0.))
+        .min_w(px(0.))
+        .panel()
+        .rounded(px(8.))
         .p(px(12.))
         .gap(px(10.))
-        .child(heading(
-            if memory {
-                "⊞  Memory by app"
-            } else {
-                "⊞  CPU by app"
-            },
-            color,
-        ))
+        .child(
+            heading(
+                if memory {
+                    "⊞  Memory by app"
+                } else {
+                    "⊞  CPU by app"
+                },
+                color,
+            )
+            .flex_shrink_0(),
+        )
         .child(when(
             move || rows.with(Vec::is_empty),
             move || {
@@ -98,67 +104,81 @@ pub fn compact_from_data(data: Signal<Sample>, memory: bool) -> impl IntoElement
                 })
             },
         ))
-        .children((0..4).map(move |index| {
-            when(
-                move || rows.with(|items| index < items.len()),
-                move || {
-                    let app = computed(move || {
-                        rows.with(|items| items.get(index).cloned().unwrap_or_default())
-                    });
-                    let fraction = computed(move || {
-                        app.with(|item| {
-                            if memory {
-                                item.memory as f64 / peak.get()
-                            } else {
-                                item.cpu as f64 / peak.get()
-                            }
-                        }) as f32
-                    });
-                    view()
-                        .flex_row()
-                        .items_center()
-                        .gap(px(10.))
-                        .child(live_avatar(app, 24.))
-                        .child(
+        .child(
+            view()
+                .flex_1()
+                .min_h(px(0.))
+                .justify_between()
+                .gap(px(6.))
+                .children((0..4).map(move |index| {
+                    when(
+                        move || rows.with(|items| index < items.len()),
+                        move || {
+                            let app = computed(move || {
+                                rows.with(|items| items.get(index).cloned().unwrap_or_default())
+                            });
+                            let fraction = computed(move || {
+                                app.with(|item| {
+                                    if memory {
+                                        item.memory as f64 / peak.get()
+                                    } else {
+                                        item.cpu as f64 / peak.get()
+                                    }
+                                }) as f32
+                            });
                             view()
-                                .flex_1()
-                                .min_w(px(0.))
-                                .gap(px(5.))
+                                .min_h(px(24.))
+                                .flex_shrink_0()
+                                .flex_row()
+                                .items_center()
+                                .gap(px(10.))
+                                .child(live_avatar(app, 24.))
                                 .child(
                                     view()
-                                        .flex_row()
-                                        .justify_between()
+                                        .flex_1()
+                                        .min_w(px(0.))
                                         .gap(px(5.))
                                         .child(
-                                            text(move || app.with(|item| item.name.clone()))
-                                                .text_size(px(12.))
-                                                .flex_1()
-                                                .min_w(px(0.)),
+                                            view()
+                                                .flex_row()
+                                                .justify_between()
+                                                .gap(px(5.))
+                                                .child(
+                                                    text(move || {
+                                                        app.with(|item| item.name.clone())
+                                                    })
+                                                    .text_size(px(12.))
+                                                    .flex_1()
+                                                    .min_w(px(0.)),
+                                                )
+                                                .child(
+                                                    text(move || {
+                                                        app.with(|item| {
+                                                            if memory {
+                                                                gb(item.memory)
+                                                            } else {
+                                                                format!("{:.1}%", item.cpu)
+                                                            }
+                                                        })
+                                                    })
+                                                    .text_size(px(12.))
+                                                    .text_color(rgb(MUTED)),
+                                                ),
                                         )
-                                        .child(
-                                            text(move || {
-                                                app.with(|item| {
-                                                    if memory {
-                                                        gb(item.memory)
-                                                    } else {
-                                                        format!("{:.1}%", item.cpu)
-                                                    }
-                                                })
-                                            })
-                                            .text_size(px(12.))
-                                            .text_color(rgb(MUTED)),
-                                        ),
+                                        .child(live_bar(fraction, color)),
                                 )
-                                .child(live_bar(fraction, color)),
-                        )
-                },
-            )
-        }))
-        .child(note(if memory {
-            "Resident memory · shared pages may overlap"
-        } else {
-            "CPU 100% = one core"
-        }))
+                        },
+                    )
+                })),
+        )
+        .child(
+            note(if memory {
+                "Resident memory · shared pages may overlap"
+            } else {
+                "CPU 100% = one core"
+            })
+            .flex_shrink_0(),
+        )
 }
 
 /// Mount this outside a region that rebuilds on every Sample. The table tracks
@@ -196,38 +216,18 @@ fn table_source(source: Rc<dyn Fn() -> Vec<AppUsage>>, memory: bool) -> impl Int
         })
     });
     let list_ref = element_ref();
-    view().bg(rgb(PANEL)).rounded(px(16.)).p(px(14.)).gap(px(12.))
-        .child(view().flex_row().flex_wrap().items_center().justify_between().gap_3()
+    view().flex_1().min_h(px(0.)).min_w(px(0.)).w_full()
+        .panel().rounded(px(8.)).p(px(12.)).gap(px(10.))
+        .child(view().flex_shrink_0().flex_row().flex_wrap().items_center().justify_between().gap_3()
             .child(heading(if memory {"⊞  Memory by app"} else {"⊞  CPU by app"}, color))
             .child(text(move || {
                 let total=all.with(Vec::len); let count=rows.with(Vec::len);
                 if count==total { format!("{} applications",count) } else { format!("{} of {} applications",count,total) }
             }).text_size(px(11.)).text_color(rgb(MUTED))))
-        .child(view().flex_row().flex_wrap().items_center().gap_3()
-            .child(input().flex_1().min_w(px(180.)).h(px(30.)).px_3().rounded(px(11.)).bg(rgb(0x19191c))
-                .border_1().border_color(rgb(0x333339)).text_color(rgb(0xf2f2f5)).text_size(px(12.))
-                .placeholder("Search applications").placeholder_color(rgb(MUTED)).value(query)
-                .test_id("apps-search").label("Search applications")
-                .on_change(move |value:&str| { animate_action(); query.set(value.to_owned()); list_ref.scroll_to_offset(px(0.),false); }))
-            .child(view().flex_row().gap_1().p_1().rounded(px(11.)).bg(rgb(0x19191c))
-                .children([(Order::Cpu,"CPU","sort-cpu"),(Order::Memory,"Memory","sort-memory"),(Order::Name,"Name","sort-name")].into_iter().map(move |(by,name,id)| {
-                    interactive(view()).h(px(28.)).justify_center().px(px(10.)).rounded(px(7.))
-                        .test_id(id).role(AccessibilityRole::Button).label(format!("Sort by {}",name))
-                        .bg(move || if order.get()==by {rgb(color).opacity(0.16)} else {rgb(0x19191c).into()})
-                        .on_press(move || {
-                            animate_action();
-                            if order.get_untracked()==by { descending.update(|v|*v=!*v); } else { order.set(by); descending.set(by!=Order::Name); }
-                            list_ref.scroll_to_offset(px(0.), false);
-                        })
-                        .child(text(move || if order.get()==by { format!("{} {}",name,if descending.get(){"↓"}else{"↑"}) } else { name.into() })
-                            .text_size(px(11.)).text_color(move || rgb(if order.get()==by {color} else {MUTED})))
-                })))
-            .child(when(move || !query.get().is_empty(), move || {
-                interactive(view()).px_2().py_2().role(AccessibilityRole::Button).label("Clear application search").test_id("apps-clear-search")
-                    .on_press(move || { animate_action(); query.set(String::new()); list_ref.scroll_to_offset(px(0.),false); })
-                    .child(text("Clear").text_size(px(11.)).text_color(rgb(MUTED)))
-            })))
-        .child(view().flex_row().justify_between().px_2().child(muted("APPLICATION"))
+        .child(view().flex_shrink_0().flex_row().flex_wrap().items_center().gap_3()
+            .child(search_control(query,list_ref))
+            .child(sort_control(order,descending,list_ref)))
+        .child(view().flex_shrink_0().flex_row().justify_between().px_2().child(muted("APPLICATION"))
             .child(muted(if memory {"MEMORY / CPU"} else {"CPU / MEMORY"})))
         .child(virtual_list(move || rows.with(Vec::len), move |at| {
             // Recycled cells retain their view tree. Position and the memo below
@@ -237,13 +237,181 @@ fn table_source(source: Rc<dyn Fn() -> Vec<AppUsage>>, memory: bool) -> impl Int
         })
             .keys(move || rows.with(|items| items.iter().map(|app|app.id.clone()).collect::<Vec<_>>()))
             .estimated_item_size(px(52.)).row_gap(px(2.))
-            .h(move || px((window().height.0-430.).clamp(300.,480.)))
-            .min_h(px(300.)).max_h(px(480.)).flex_shrink_0().w_full()
+            .flex_1().min_h(px(0.)).w_full()
             .test_id("apps-list").label("Application resources").element_ref(&list_ref)
             .empty(view().py_6().gap_2()
                 .child(text(move || if query.get().is_empty(){"Application metrics unavailable"}else{"No matching applications"}).text_size(px(12.)))
                 .child(text(move || if !query.get().is_empty(){"Try a shorter name or clear the search."}else if cfg!(target_os="ios"){ "iOS does not permit inspection of other applications." }else{"No application resource readings are available yet."}).text_size(px(11.)).text_color(rgb(MUTED)))))
-        .child(note("Bars compare the visible applications. Select an application to inspect its resource totals."))
+        .child(note("Bars compare the visible applications. Select an application to inspect its resource totals.").flex_shrink_0())
+}
+
+/// A single inset field keeps its clear affordance in a fixed trailing slot,
+/// so typing does not move either the field or the adjacent sort control.
+fn search_control(query: Signal<String>, list_ref: ElementRef) -> impl IntoElement {
+    let focused = signal(false);
+    let field = element_ref();
+    view().flex_1().min_w(px(220.)).h(px(32.)).flex_row().items_center()
+        .gap(px(8.)).px(px(10.)).rounded(px(9.))
+        .bg(rgb(0x0f0f11).opacity(0.62)).border_1()
+        .border_color(move||if focused.get(){rgb(0xffffff).opacity(0.24)}else{rgb(0xffffff).opacity(0.10)})
+        .transition_colors().duration(move||if reduce_motion(){0_f32}else{140_f32})
+        .on_press(move||field.focus())
+        .child(canvas(Painter::new().stroke_color(rgb(MUTED)).line_width(1.5)
+            .line_cap(nsh_core::canvas::LineCap::Round)
+            .stroke_svg("M10.5 6.25A4.25 4.25 0 1 1 2 6.25A4.25 4.25 0 1 1 10.5 6.25 M9.3 9.3L13 13"))
+            .w(px(14.)).h(px(14.)).flex_shrink_0().accessible(false))
+        .child(input().flex_1().min_w(px(0.)).h(px(30.)).px(px(0.)).py(px(0.))
+            .border(px(0.)).bg(rgb(0x000000).opacity(0.))
+            .text_color(rgb(0xeeeef2)).text_size(px(12.))
+            .placeholder("Search applications…").placeholder_color(rgb(0x7e838e)).value(query)
+            .test_id("apps-search").label("Search applications").element_ref(&field)
+            .on_focus(move||focused.set(true)).on_blur(move||focused.set(false))
+            .on_change(move|value:&str|{query.set(value.to_owned());list_ref.scroll_to_offset(px(0.),false);}))
+        .child(view().w(px(22.)).h(px(24.)).flex_shrink_0().child(when(
+            move||!query.get().is_empty(),move||{
+                view().w(px(22.)).h(px(24.)).items_center().justify_center().rounded(px(5.))
+                    .test_id("apps-clear-search").label("Clear application search").role(AccessibilityRole::Button)
+                    .tooltip("Clear search").hover(|s|s.bg(rgb(0xffffff).opacity(0.07)))
+                    .focus(|s|s.outline(px(1.)).outline_color(rgb(0xffffff).opacity(0.35)))
+                    .on_press(move||{query.set(String::new());list_ref.scroll_to_offset(px(0.),false);field.focus();})
+                    .child(canvas(Painter::new().stroke_color(rgb(0xa3a8b2)).line_width(1.4)
+                        .line_cap(nsh_core::canvas::LineCap::Round).stroke_svg("M4 4L10 10 M10 4L4 10"))
+                        .w(px(14.)).h(px(14.)).accessible(false).pointer_events(PointerEvents::None))
+            })))
+}
+
+fn sort_control(
+    order: Signal<Order>,
+    descending: Signal<bool>,
+    list_ref: ElementRef,
+) -> impl IntoElement {
+    view()
+        .flex_row()
+        .h(px(32.))
+        .gap(px(2.))
+        .p(px(2.))
+        .rounded(px(9.))
+        .bg(rgb(0x0f0f11).opacity(0.55))
+        .border_1()
+        .border_color(rgb(0xffffff).opacity(0.08))
+        .children(
+            [
+                (Order::Cpu, "CPU", "sort-cpu", 1),
+                (Order::Memory, "Memory", "sort-memory", 2),
+                (Order::Name, "Name", "sort-name", 0),
+            ]
+            .into_iter()
+            .map(move |(by, name, id, icon)| {
+                let selected = computed(move || order.get() == by);
+                let tint = if by == Order::Cpu {
+                    COLORS[1]
+                } else if by == Order::Memory {
+                    COLORS[2]
+                } else {
+                    0xaeb8ca
+                };
+                view()
+                    .relative()
+                    .flex_row()
+                    .items_center()
+                    .justify_center()
+                    .h(px(26.))
+                    .gap(px(5.))
+                    .px(px(9.))
+                    .rounded(px(6.))
+                    .border_1()
+                    .border_color(move || {
+                        if selected.get() {
+                            rgb(0xffffff).opacity(0.16)
+                        } else {
+                            rgb(0xffffff).opacity(0.)
+                        }
+                    })
+                    .bg(move || rgb(0x29292c).opacity(if selected.get() { 0.9 } else { 0. }))
+                    .shadow_color(rgb(0x000000))
+                    .shadow_opacity(move || if selected.get() { 0.20_f32 } else { 0_f32 })
+                    .shadow_radius(px(3.))
+                    .shadow_offset(Point::new(px(0.), px(2.)))
+                    .child(
+                        view()
+                            .absolute()
+                            .top(px(0.))
+                            .left(px(6.))
+                            .right(px(6.))
+                            .h(px(0.75))
+                            .bg(move || {
+                                rgb(0xffffff).opacity(if selected.get() { 0.06 } else { 0. })
+                            })
+                            .pointer_events(PointerEvents::None),
+                    )
+                    .test_id(id)
+                    .role(AccessibilityRole::Button)
+                    .label(move || {
+                        format!(
+                            "Sort by {}{}",
+                            name,
+                            if selected.get() {
+                                if descending.get() {
+                                    ", descending"
+                                } else {
+                                    ", ascending"
+                                }
+                            } else {
+                                ""
+                            }
+                        )
+                    })
+                    .tooltip(format!("Sort by {name}; select again to reverse"))
+                    .hover(|s| s.bg(rgb(0xffffff).opacity(0.055)))
+                    .focus(|s| s.outline(px(1.)).outline_color(rgb(0xffffff).opacity(0.35)))
+                    .transition_colors()
+                    .duration(move || if reduce_motion() { 0_f32 } else { 140_f32 })
+                    .on_press(move || {
+                        animate_action();
+                        if order.get_untracked() == by {
+                            descending.update(|v| *v = !*v);
+                        } else {
+                            order.set(by);
+                            descending.set(by != Order::Name);
+                        }
+                        list_ref.scroll_to_offset(px(0.), false);
+                    })
+                    .child(dynamic(move || {
+                        if by == Order::Name {
+                            text("A")
+                                .text_size(px(10.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(rgb(if selected.get() { tint } else { MUTED }))
+                                .into_element()
+                        } else {
+                            crate::visuals::icon(
+                                icon,
+                                if selected.get() { tint } else { MUTED },
+                                12.,
+                            )
+                            .into_element()
+                        }
+                    }))
+                    .child(
+                        text(name)
+                            .text_size(px(11.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(move || rgb(if selected.get() { 0xe8edf4 } else { MUTED })),
+                    )
+                    .child(
+                        text(move || {
+                            if selected.get() {
+                                if descending.get() { "↓" } else { "↑" }
+                            } else {
+                                ""
+                            }
+                        })
+                        .w(px(8.))
+                        .text_size(px(10.))
+                        .text_color(rgb(tint)),
+                    )
+            }),
+        )
 }
 
 fn resource_row(
@@ -265,7 +433,7 @@ fn resource_row(
             }
         }) as f32
     });
-    view().rounded(px(12.)).bg(move || rgb(if open.get(){0x25252b}else{0x202023})).overflow_hidden()
+    view().rounded(px(8.)).bg(move || rgb(if open.get(){0x25252b}else{0x202023})).overflow_hidden()
         .child(interactive(view()).flex_row().items_center().gap(px(10.)).px(px(10.)).py(px(8.)).min_h(px(52.))
             // test_id is static in NSH: use the row selector plus its live AX
             // label, rather than leave an obsolete app id on a recycled cell.
@@ -416,10 +584,10 @@ mod tests {
 fn muted(value: impl Into<String>) -> impl IntoElement {
     text(value.into()).text_size(px(11.)).text_color(rgb(MUTED))
 }
-fn note(value: impl Into<String>) -> impl IntoElement {
+fn note(value: impl Into<String>) -> impl IntoElement + Styled {
     text(value.into()).text_size(px(10.)).text_color(rgb(MUTED))
 }
-fn heading(value: impl Into<String>, color: u32) -> impl IntoElement {
+fn heading(value: impl Into<String>, color: u32) -> impl IntoElement + Styled {
     text(value.into())
         .text_size(px(13.))
         .font_weight(FontWeight::SEMIBOLD)
