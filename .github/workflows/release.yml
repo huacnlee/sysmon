@@ -1,0 +1,84 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build (without v)
+        required: true
+        default: '0.1.1'
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    env:
+      TMPDIR: ${{ github.workspace }}/../sysmon-tmp
+    steps:
+      - name: Prepare scratch directory
+        run: mkdir -p "$TMPDIR"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux system libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang libclang-dev libgtk-4-dev libglib2.0-bin xvfb
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock') }}
+      - name: Installer regression tests
+        run: python -B -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Build native package
+        env:
+          TAG: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          version="${INPUT_VERSION:-${TAG#v}}"
+          python scripts/build-release.py --version "$version"
+      - name: Rust regression tests
+        run: cargo test --lib --locked
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sysmon-${{ runner.os }}-${{ runner.arch }}
+          path: .nsh/dist/*.tar.gz
+          if-no-files-found: error
+          include-hidden-files: true
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: .nsh/dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: .nsh/dist
+        run: sha256sum *.tar.gz > SHA256SUMS
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" .nsh/dist/* --clobber
+          else
+            gh release create "$TAG" .nsh/dist/* --verify-tag --generate-notes --title "sysmon $TAG"
+          fi

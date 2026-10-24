@@ -11,7 +11,15 @@ use nsh_platform_macos as platform;
 use nsh_platform_windows as platform;
 
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-fn main() -> impl std::process::Termination {
+fn main() -> std::process::ExitCode {
+    use std::process::Termination;
+    if std::env::args()
+        .skip(1)
+        .any(|arg| arg == "--version" || arg == "-V")
+    {
+        println!("sysmon {}", env!("CARGO_PKG_VERSION"));
+        return std::process::ExitCode::SUCCESS;
+    }
     env_logger::init();
     platform::run_app(
         platform::AppSource::Rust(platform::Root::of::<sysmon::App>()),
@@ -23,6 +31,7 @@ fn main() -> impl std::process::Termination {
             ..Default::default()
         },
     )
+    .report()
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
