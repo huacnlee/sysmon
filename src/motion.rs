@@ -1,5 +1,5 @@
 //! Small, native-driven motions. No Rust frame timers or per-frame tree rebuilds.
-use nsh_core::ui::{LayoutAnimation, prelude::*};
+use nsh_core::{LayoutAnimation, prelude::*};
 
 pub fn enter<S: Styled + Element>(element: S, delay: f32) -> S {
     let progress = animated_value(if reduce_motion() { 1_f32 } else { 0_f32 });

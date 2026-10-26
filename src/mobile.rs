@@ -7,7 +7,7 @@ use crate::{
 };
 use nsh_core::{
     mobile::{TabBarItem, tab_bar},
-    ui::prelude::*,
+    prelude::*,
 };
 
 const SECTIONS: [&str; 4] = ["Overview", "Activity", "Device", "About"];
@@ -52,9 +52,9 @@ pub fn shell(
             "info.circle",
         ]
     };
-    nsh_base::safe_area_view()
+    view()
         // Native navigation owns the top inset; the TabBar owns the bottom inset.
-        .edges(vec![nsh_base::Edge::Left, nsh_base::Edge::Right])
+        .px_safe_area()
         .flex_1()
         .w_full()
         .h_full()

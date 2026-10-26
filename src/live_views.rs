@@ -7,7 +7,7 @@ use crate::{
     providers::Extras,
     rate, reading, title, visuals,
 };
-use nsh_core::ui::prelude::*;
+use nsh_core::prelude::*;
 
 fn series(data: Signal<Sample>, index: usize) -> Signal<Vec<f32>> {
     let values = signal(Vec::new());
@@ -259,7 +259,7 @@ pub fn overview(
                         .min_w(px(0.))
                         .min_h(px(0.))
                         .inline_style(move || {
-                            nsh_core::ui::Style::default().with(
+                            nsh_core::element::Style::default().with(
                                 nsh_core::StyleKey::Display,
                                 nsh_core::PatchValue::Str(if window().width.0 < 700. {
                                     "none".into()
@@ -403,7 +403,7 @@ pub fn overview(
                                     .gap_2()
                                     .test_id(&format!("overview-workload-{index}"))
                                     .label(caption)
-                                    .tooltip(caption)
+                                    .tooltip(crate::hint(caption))
                                     .on_press(move || tab.set(index))
                                     .child(visuals::badge_icon(index, COLORS[index]))
                                     .child(
@@ -427,7 +427,7 @@ pub fn overview(
                                             .child(
                                                 view()
                                                     .inline_style(move || {
-                                                        nsh_core::ui::Style::default().with(
+                                                        nsh_core::element::Style::default().with(
                                                             nsh_core::StyleKey::Display,
                                                             nsh_core::PatchValue::Str(
                                                                 if window().width.0 < 800. {

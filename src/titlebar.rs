@@ -1,8 +1,5 @@
 //! Desktop navigation and persistent telemetry share the app-owned title bar.
-use nsh_core::{
-    desktop::TitleBarStyle,
-    ui::{desktop, prelude::*},
-};
+use nsh_core::{desktop::TitleBarStyle, element::desktop, prelude::*};
 
 pub fn install() {
     set_color_scheme(Appearance::Dark);
@@ -68,7 +65,7 @@ pub fn bar(
                         })
                         .window_drag(false)
                         .pointer_events(PointerEvents::BoxOnly)
-                        .tooltip("Overview")
+                        .tooltip(crate::hint("Overview"))
                         .on_press(move || tab.set(0))
                         .hover(|s| s.bg(rgb(0x18181a)))
                         .child(dynamic(move || {
@@ -136,7 +133,7 @@ pub fn bar(
                             selected: tab.get() == 3,
                             ..Default::default()
                         })
-                        .tooltip("Disk read / write")
+                        .tooltip(crate::hint("Disk read / write"))
                         .on_press(move || tab.set(3))
                         .hover(|s| s.bg(rgb(0x18181a)))
                         .child(crate::visuals::icon(3, crate::COLORS[3], 15.))
@@ -181,7 +178,7 @@ fn metric(
         })
         .window_drag(false)
         .pointer_events(PointerEvents::BoxOnly)
-        .tooltip(hint)
+        .tooltip(crate::hint(hint))
         .on_press(move || tab.set(index))
         .hover(|s| s.bg(rgb(0x18181a)))
         .child(crate::visuals::icon(index, color, 15.))
@@ -254,7 +251,7 @@ fn more_menu(tab: Signal<usize>) -> impl IntoElement {
                 .role(AccessibilityRole::Button)
                 .window_drag(false)
                 .pointer_events(PointerEvents::BoxOnly)
-                .tooltip("More")
+                .tooltip(crate::hint("More"))
                 .hover(|s| s.bg(rgb(0x18181a)))
                 .child(
                     canvas(

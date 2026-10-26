@@ -1,7 +1,7 @@
 //! Application resource lists. Search, ordering and expanded details live outside
 //! the sample-dependent region so a live refresh does not reset the controls.
 use crate::PanelSurface;
-use nsh_core::ui::prelude::*;
+use nsh_core::prelude::*;
 use nsh_core::{LayoutAnimation, LayoutCurve, LayoutTransition};
 use std::rc::Rc;
 
@@ -251,7 +251,7 @@ fn search_control(query: Signal<String>, list_ref: ElementRef) -> impl IntoEleme
             .line_cap(nsh_core::canvas::LineCap::Round)
             .stroke_svg("M10.5 6.25A4.25 4.25 0 1 1 2 6.25A4.25 4.25 0 1 1 10.5 6.25 M9.3 9.3L13 13"))
             .w(px(14.)).h(px(14.)).flex_shrink_0().accessible(false))
-        .child(input().flex_1().min_w(px(0.)).h(px(30.)).px(px(0.)).py(px(0.))
+        .child(nsh_base::input().flex_1().min_w(px(0.)).h(px(30.)).px(px(0.)).py(px(0.))
             .border(px(0.)).bg(rgb(0x000000).opacity(0.))
             .text_color(rgb(0xeeeef2)).text_size(px(12.))
             .placeholder("Search applications…").placeholder_color(rgb(0x7e838e)).value(query)
@@ -262,7 +262,7 @@ fn search_control(query: Signal<String>, list_ref: ElementRef) -> impl IntoEleme
             move||!query.get().is_empty(),move||{
                 view().w(px(22.)).h(px(24.)).items_center().justify_center().rounded(px(5.))
                     .test_id("apps-clear-search").label("Clear application search").role(AccessibilityRole::Button)
-                    .tooltip("Clear search").hover(|s|s.bg(rgb(0xffffff).opacity(0.07)))
+                    .tooltip(crate::hint("Clear search")).hover(|s|s.bg(rgb(0xffffff).opacity(0.07)))
                     .focus(|s|s.outline(px(1.)).outline_color(rgb(0xffffff).opacity(0.35)))
                     .on_press(move||{query.set(String::new());list_ref.scroll_to_offset(px(0.),false);field.focus();})
                     .child(canvas(Painter::new().stroke_color(rgb(0xa3a8b2)).line_width(1.4)
@@ -352,7 +352,7 @@ fn sort_control(
                             }
                         )
                     })
-                    .tooltip(format!("Sort by {name}; select again to reverse"))
+                    .tooltip(crate::hint(format!("Sort by {name}; select again to reverse")))
                     .hover(|s| s.bg(rgb(0xffffff).opacity(0.055)))
                     .focus(|s| s.outline(px(1.)).outline_color(rgb(0xffffff).opacity(0.35)))
                     .transition_colors()
