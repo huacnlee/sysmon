@@ -1,8 +1,8 @@
 {
   "name": "sysmon",
   "id": "dev.sysmon.app",
-  "version": "0.1.5",
-  "build": 7,
+  "version": "0.1.6",
+  "build": 8,
   "rust": ".",
   "root": "App",
   "appearance": "dark",
