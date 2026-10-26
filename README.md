@@ -35,10 +35,10 @@ Archives appear in `.nsh/dist`. Pushing a matching version tag builds both platf
 
 ## Development
 
-Install Rust stable and the pinned NSH main CLI, plus the platform SDKs described in [PLATFORMS.md](PLATFORMS.md).
+Install Rust stable and the pinned NSH 0.3.0 CLI, plus the platform SDKs described in [PLATFORMS.md](PLATFORMS.md).
 
 ```sh
-cargo install --git https://github.com/longbridge/nsh --rev 6e6c45dd0d3be288015a2c78a998c9806b4c1c89 --locked nsh-cli
+cargo install --git https://github.com/longbridge/nsh --rev 76fa8a7fed47ea51aea01fa85bb40960be15d984 --locked nsh-cli
 cargo run                         # native desktop
 nsh run --target macos
 nsh run --target windows

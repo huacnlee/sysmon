@@ -1,6 +1,6 @@
 //! Small native vector primitives shared by navigation, cards and resource rows.
 //! Icons use a 24-point grid and are drawn by NSH rather than platform fonts.
-use nsh_core::ui::prelude::*;
+use nsh_core::prelude::*;
 
 const ICON_PATHS: [&str; 13] = [
     // Overview: four softly rounded tiles.

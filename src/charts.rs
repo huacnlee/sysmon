@@ -3,7 +3,7 @@
 use nsh_core::{
     animation::Easing,
     canvas::{CanvasGradient, CanvasTextAlign, LineCap, LineJoin},
-    ui::prelude::*,
+    prelude::*,
 };
 use std::{cell::RefCell, rc::Rc};
 
@@ -829,17 +829,19 @@ pub fn plot_with_options(
             cursor.try_set(None);
         }
     })
-    .claim_touches(nsh_core::ui::TouchClaim::on_pan(
+    .claim_touches(nsh_core::element::TouchClaim::on_pan(
         nsh_core::PanActivation::horizontal(px(10.), px(10.)),
     ))
-    .on_responder_grant(move |event: &nsh_core::ui::ResponderEvent| {
+    .on_responder_grant(move |event: &nsh_core::element::ResponderEvent| {
         grant_select(event.location.x.0)
     })
-    .on_responder_move(move |event: &nsh_core::ui::ResponderEvent| select_at(event.location.x.0))
-    .on_responder_release(move |_: &nsh_core::ui::ResponderEvent| {
+    .on_responder_move(move |event: &nsh_core::element::ResponderEvent| {
+        select_at(event.location.x.0)
+    })
+    .on_responder_release(move |_: &nsh_core::element::ResponderEvent| {
         cursor.try_set(None);
     })
-    .on_responder_terminate(move |_: &nsh_core::ui::ResponderEvent| {
+    .on_responder_terminate(move |_: &nsh_core::element::ResponderEvent| {
         cursor.try_set(None);
     })
     .on_hover_out(move || {

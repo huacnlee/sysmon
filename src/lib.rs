@@ -1,5 +1,5 @@
 //! sysmon: a native, live system dashboard.
-use nsh_core::ui::prelude::*;
+use nsh_core::prelude::*;
 use std::{sync::mpsc, time::Duration};
 mod app_list;
 mod apps;
@@ -409,7 +409,8 @@ fn desktop_shell(
     extras: Signal<providers::Extras>,
     ready: Signal<bool>,
 ) -> impl IntoElement {
-    nsh_base::safe_area_view()
+    view()
+        .p_safe_area()
         .w_full()
         .h_full()
         .flex_1()
@@ -1256,7 +1257,7 @@ fn detail_stats(s: &Sample, tab: usize) -> impl IntoElement {
                                 .gap_2()
                         })
                         .when(!compact, |v| v.p_3().gap_2())
-                        .tooltip(note.clone())
+                        .tooltip(crate::hint(note.clone()))
                         .child(title(heading, COLORS[tab]))
                         .child(
                             text(value)
@@ -1363,4 +1364,16 @@ fn summary_tile(heading: &str, value: String, note: &str, color: u32) -> impl In
                 .font_weight(FontWeight::SEMIBOLD),
         )
         .child(label(note))
+}
+
+/// Shared appearance for the tooltip elements required by NSH 0.3.
+fn hint(message: impl Into<String>) -> impl IntoElement + nsh_core::element::IntoTooltip {
+    nsh_base::tooltip()
+        .bg(rgb(0x252528))
+        .text_color(rgb(0xeeeef1))
+        .text_size(px(12.))
+        .px(px(8.))
+        .py(px(5.))
+        .rounded(px(5.))
+        .child(text(message.into()))
 }
