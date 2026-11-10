@@ -261,11 +261,15 @@ pub fn overview(
                         .inline_style(move || {
                             nsh_core::element::Style::default().with(
                                 nsh_core::StyleKey::Display,
-                                nsh_core::PatchValue::Str(if window().width.0 < 700. {
-                                    "none".into()
-                                } else {
-                                    "flex".into()
-                                }),
+                                nsh_core::StyleKey::Display
+                                    .parse_value(nsh_core::StyleValue::Str(
+                                        if window().width.0 < 700. {
+                                            "none"
+                                        } else {
+                                            "flex"
+                                        },
+                                    ))
+                                    .expect("display value"),
                             )
                         })
                         .gap_2()
@@ -429,13 +433,17 @@ pub fn overview(
                                                     .inline_style(move || {
                                                         nsh_core::element::Style::default().with(
                                                             nsh_core::StyleKey::Display,
-                                                            nsh_core::PatchValue::Str(
-                                                                if window().width.0 < 800. {
-                                                                    "none".into()
-                                                                } else {
-                                                                    "flex".into()
-                                                                },
-                                                            ),
+                                                            nsh_core::StyleKey::Display
+                                                                .parse_value(
+                                                                    nsh_core::StyleValue::Str(
+                                                                        if window().width.0 < 800. {
+                                                                            "none"
+                                                                        } else {
+                                                                            "flex"
+                                                                        },
+                                                                    ),
+                                                                )
+                                                                .expect("display value"),
                                                         )
                                                     })
                                                     .child(label(caption)),
