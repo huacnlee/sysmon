@@ -1,26 +1,30 @@
+diff --git a/java/com/longbridge/nsh/Mounter.java b/java/com/longbridge/nsh/Mounter.java
+index 8b56dde..51e0f31 100644
 --- a/java/com/longbridge/nsh/Mounter.java
 +++ b/java/com/longbridge/nsh/Mounter.java
-@@ -73,6 +73,14 @@
-         if (appearance != 0) return appearance == 2;
-         return (context.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+@@ -86,6 +86,14 @@ final class Mounter {
                  == android.content.res.Configuration.UI_MODE_NIGHT_YES;
-+    }
-+
+     }
+ 
 +    /** Restore the app's status bar after the Activity updates system defaults. */
 +    void reapplySystemBars() {
 +        if (barStyle < 0) return;
 +        boolean dark = night();
 +        SystemUi.statusBar(context, barStyle, barHidden, dark);
 +        for (ModalHost modal : shownModals) modal.statusBar(barStyle, barHidden, dark);
-     }
- 
++    }
++
      /** A screen's options (`encode.rs` `screen_config`). */
+     static final class ScreenOptions {
+         String title, backTitle;
+diff --git a/java/com/longbridge/nsh/NshView.java b/java/com/longbridge/nsh/NshView.java
+index d0ffa14..400c2c9 100644
 --- a/java/com/longbridge/nsh/NshView.java
 +++ b/java/com/longbridge/nsh/NshView.java
-@@ -601,6 +601,11 @@
-     protected void onConfigurationChanged(Configuration config) {
-         super.onConfigurationChanged(config);
+@@ -677,6 +677,11 @@ public class NshView extends FrameLayout {
          publishEnvironment(getRootWindowInsets());
+         int w = getWidth(), h = getHeight();
+         if (rescaled && handle != 0 && w > 0 && h > 0) Native.resize(handle, w / density, h / density);
 +        // AppActivity resets bars after dispatching this callback. Restore the
 +        // cached app/page/dialog setting once that callback has returned.
 +        post(() -> {

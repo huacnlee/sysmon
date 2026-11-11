@@ -396,19 +396,31 @@ pub fn App() -> impl IntoElement {
     // OS is fixed for the lifetime of the host. Keep the chosen shell as the
     // direct root so it receives the full viewport rather than a region wrapper.
     if is_desktop() {
-        desktop_shell(tab, paused, expanded_workload, data, extras, ready).into_element()
+        desktop_shell(DesktopSignals {
+            tab,
+            paused,
+            expanded_workload,
+            data,
+            extras,
+            ready,
+        })
+        .into_element()
     } else {
         mobile::shell(data, extras, paused, ready).into_element()
     }
 }
-fn desktop_shell(
+
+#[derive(Clone, Copy)]
+struct DesktopSignals {
     tab: Signal<usize>,
     paused: Signal<bool>,
     expanded_workload: Signal<String>,
     data: Signal<Sample>,
     extras: Signal<providers::Extras>,
     ready: Signal<bool>,
-) -> impl IntoElement {
+}
+
+fn desktop_shell(signals: DesktopSignals) -> impl IntoElement {
     view()
         .p_safe_area()
         .w_full()
@@ -416,65 +428,81 @@ fn desktop_shell(
         .flex_1()
         .bg(rgb(BG))
         .text_color(rgb(0xeeeef1))
-        .child(titlebar::bar(tab, paused, data))
+        .child(titlebar::bar(signals.tab, signals.paused, signals.data))
+        .child(desktop_workspace(signals))
+}
+
+fn desktop_workspace(signals: DesktopSignals) -> impl IntoElement {
+    view()
+        .flex_1()
+        .min_h(px(0.))
+        .min_w(px(0.))
+        .p(move || px(if window().width.0 < 600. { 10. } else { 16. }))
         .child(
             view()
                 .flex_1()
                 .min_h(px(0.))
-                .min_w(px(0.))
-                .p(move || px(if window().width.0 < 600. { 10. } else { 16. }))
-                .child(
-                    view()
-                        .flex_1()
-                        .min_h(px(0.))
-                        .w_full()
-                        .test_id("desktop-content")
-                        .overflow_hidden()
-                        .child(dynamic(move || {
-                            if !ready.get() {
-                                return view()
-                                    .p_5()
-                                    .child(label("Reading your device…"))
-                                    .into_element();
-                            }
-                            let current = tab.get();
-                            let content = match current {
-                                0 => live_views::overview(data, extras, tab, paused).into_element(),
-                                1..=4 => view()
-                                    .flex_1()
-                                    .h_full()
-                                    .min_h(px(0.))
-                                    .gap_2()
-                                    .child(live_views::detail(data, current, paused))
-                                    .when(current <= 2, |v| {
-                                        v.child(app_list::table_from_data(data, current == 2))
-                                    })
-                                    .into_element(),
-                                10 | 11 => workload_page(data, extras, current, expanded_workload)
-                                    .into_element(),
-                                12 => container_page(extras).into_element(),
-                                5 => live_views::gpu_detail(data, extras, paused).into_element(),
-                                7 | 8 => dynamic(move || {
-                                    device_page(&extras.get(), current).into_element()
-                                })
-                                .into_element(),
-                                9 => dynamic(move || bluetooth_page(extras).into_element())
-                                    .into_element(),
-                                i => unavailable(i).into_element(),
-                            };
-                            motion::enter(
-                                view()
-                                    .w_full()
-                                    .h_full()
-                                    .flex_1()
-                                    .min_h(px(0.))
-                                    .child(content),
-                                0.,
-                            )
-                            .into_element()
-                        })),
-                ),
+                .w_full()
+                .test_id("desktop-content")
+                .overflow_hidden()
+                .child(desktop_content(signals)),
         )
+}
+
+fn desktop_content(signals: DesktopSignals) -> impl IntoElement {
+    dynamic(move || {
+        if !signals.ready.get() {
+            return desktop_loading().into_element();
+        }
+        let content = desktop_section(signals, signals.tab.get());
+        motion::enter(
+            view()
+                .w_full()
+                .h_full()
+                .flex_1()
+                .min_h(px(0.))
+                .child(content),
+            0.,
+        )
+        .into_element()
+    })
+}
+
+fn desktop_section(signals: DesktopSignals, tab: usize) -> AnyElement {
+    match tab {
+        0 => live_views::overview(signals.data, signals.extras, signals.tab, signals.paused)
+            .into_element(),
+        1..=4 => desktop_resource_page(signals.data, tab, signals.paused).into_element(),
+        10 | 11 => workload_page(signals.data, signals.extras, tab, signals.expanded_workload)
+            .into_element(),
+        12 => container_page(signals.extras).into_element(),
+        5 => live_views::gpu_detail(signals.data, signals.extras, signals.paused).into_element(),
+        7 | 8 => {
+            dynamic(move || device_page(&signals.extras.get(), tab).into_element()).into_element()
+        }
+        9 => dynamic(move || bluetooth_page(signals.extras).into_element()).into_element(),
+        other => unavailable(other).into_element(),
+    }
+}
+
+fn desktop_resource_page(
+    data: Signal<Sample>,
+    tab: usize,
+    paused: Signal<bool>,
+) -> impl IntoElement {
+    view()
+        .flex_1()
+        .h_full()
+        .min_h(px(0.))
+        .gap_2()
+        .child(live_views::detail(data, tab, paused))
+        .when(tab <= 2, |v| {
+            v.child(app_list::table_from_data(data, tab == 2))
+        })
+}
+
+fn desktop_loading() -> impl IntoElement {
+    view().p_5().child(label("Reading your device…"))
 }
 #[cfg(not(target_os = "ios"))]
 fn system_uptime() -> u64 {
@@ -513,198 +541,256 @@ fn workload_page(
         .h_full()
         .min_h(px(0.))
         .gap_2()
-        .child(view().flex_shrink_0().child(dynamic(move || {
-            let s = data.get();
-            let items = if tab == 10 {
-                &s.workloads.projects
-            } else {
-                &s.workloads.agents
-            };
-            view()
-                .flex_row()
-                .flex_wrap()
-                .gap_2()
-                .child(summary_tile(
-                    if tab == 10 {
-                        "Development projects"
-                    } else {
-                        "Your coding assistants"
-                    },
-                    items.len().to_string(),
-                    "Discovered on this device",
-                    color,
-                ))
-                .child(summary_tile(
-                    "Memory",
-                    gb(items.iter().map(|i| i.memory).sum()),
-                    "Combined resident memory",
-                    color,
-                ))
-                .child(summary_tile(
-                    "CPU",
-                    format!("{:.1}%", items.iter().map(|i| i.cpu).sum::<f32>()),
-                    "100% equals one core",
-                    color,
-                ))
-                .child(summary_tile(
-                    "Processes",
-                    items
-                        .iter()
-                        .map(|i| i.running_processes)
-                        .sum::<usize>()
-                        .to_string(),
-                    "Observed processes",
-                    color,
-                ))
-                .into_element()
-        })))
+        .child(workload_summary(data, tab, color))
+        .child(workload_list(data, extras, tab, expanded, color))
+}
+
+fn workload_summary(data: Signal<Sample>, tab: usize, color: u32) -> impl IntoElement {
+    view().flex_shrink_0().child(dynamic(move || {
+        workload_summary_tiles(&data.get(), tab, color).into_element()
+    }))
+}
+
+fn workload_summary_tiles(sample: &Sample, tab: usize, color: u32) -> impl IntoElement {
+    let items = workload_items(sample, tab);
+    view()
+        .flex_row()
+        .flex_wrap()
+        .gap_2()
+        .child(summary_tile(
+            workload_summary_title(tab),
+            items.len().to_string(),
+            "Discovered on this device",
+            color,
+        ))
+        .child(summary_tile(
+            "Memory",
+            gb(items.iter().map(|item| item.memory).sum()),
+            "Combined resident memory",
+            color,
+        ))
+        .child(summary_tile(
+            "CPU",
+            format!("{:.1}%", items.iter().map(|item| item.cpu).sum::<f32>()),
+            "100% equals one core",
+            color,
+        ))
+        .child(summary_tile(
+            "Processes",
+            items
+                .iter()
+                .map(|item| item.running_processes)
+                .sum::<usize>()
+                .to_string(),
+            "Observed processes",
+            color,
+        ))
+}
+
+fn workload_summary_title(tab: usize) -> &'static str {
+    if tab == 10 {
+        "Development projects"
+    } else {
+        "Your coding assistants"
+    }
+}
+
+fn workload_list_title(tab: usize) -> &'static str {
+    if tab == 10 {
+        "Projects"
+    } else {
+        "Local sessions"
+    }
+}
+
+fn workload_items(sample: &Sample, tab: usize) -> &[workloads::Workload] {
+    if tab == 10 {
+        &sample.workloads.projects
+    } else {
+        &sample.workloads.agents
+    }
+}
+
+fn workload_list(
+    data: Signal<Sample>,
+    extras: Signal<providers::Extras>,
+    tab: usize,
+    expanded: Signal<String>,
+    color: u32,
+) -> impl IntoElement {
+    view()
+        .panel()
+        .rounded(px(8.))
+        .p(px(10.))
+        .flex_1()
+        .min_h(px(0.))
+        .gap_2()
         .child(
             view()
-                .panel()
-                .rounded(px(8.))
-                .p(px(10.))
+                .flex_row()
+                .flex_shrink_0()
+                .justify_between()
+                .child(title(workload_list_title(tab), color))
+                .child(label("CPU / MEMORY")),
+        )
+        .child(
+            scroll()
                 .flex_1()
                 .min_h(px(0.))
-                .gap_2()
-                .child(
-                    view()
-                        .flex_row()
-                        .flex_shrink_0()
-                        .justify_between()
-                        .child(title(
-                            if tab == 10 {
-                                "Projects"
-                            } else {
-                                "Local sessions"
-                            },
-                            color,
-                        ))
-                        .child(label("CPU / MEMORY")),
-                )
-                .child(
-                    scroll()
-                        .flex_1()
-                        .min_h(px(0.))
-                        .test_id("workload-list")
-                        .child(dynamic(move || {
-                            workload_rows(&data.get(), &extras.get(), tab, expanded).into_element()
-                        })),
-                ),
+                .test_id("workload-list")
+                .child(dynamic(move || {
+                    workload_rows(&data.get(), &extras.get(), tab, expanded).into_element()
+                })),
         )
 }
+
 fn workload_rows(
-    s: &Sample,
-    e: &providers::Extras,
+    sample: &Sample,
+    extras: &providers::Extras,
     tab: usize,
     expanded: Signal<String>,
 ) -> impl IntoElement {
-    let items = if tab == 10 {
-        &s.workloads.projects
-    } else {
-        &s.workloads.agents
-    };
+    let items = workload_items(sample, tab);
     let color = COLORS[tab];
     view()
         .gap_2()
-        .when(items.is_empty(), |v| {
-            v.child(view().py_6().child(label(
-                if cfg!(any(target_os = "ios", target_os = "android")) {
-                    "This platform restricts discovery of other applications."
-                } else if tab == 10 {
-                    "No development processes detected. Start a development server to see it here."
-                } else {
-                    "No coding assistant processes detected."
-                },
-            )))
-        })
-        .children(items.iter().map(|item| {
-            let key = format!("{}:{}:{}", tab, item.name, item.pid);
-            let click_key = key.clone();
-            let open = expanded.get() == key;
-            let ports: Vec<_> = e
-                .listening_ports
+        .when(items.is_empty(), |view| view.child(workload_empty(tab)))
+        .children(
+            items
                 .iter()
-                .filter(|(pid, _)| item.pids.contains(pid))
-                .map(|(_, port)| port.clone())
-                .collect();
+                .map(|item| workload_row(item, extras, tab, color, expanded)),
+        )
+}
+
+fn workload_empty(tab: usize) -> impl IntoElement {
+    view().py_6().child(label(workload_empty_message(tab)))
+}
+
+fn workload_empty_message(tab: usize) -> &'static str {
+    if cfg!(any(target_os = "ios", target_os = "android")) {
+        "This platform restricts discovery of other applications."
+    } else if tab == 10 {
+        "No development processes detected. Start a development server to see it here."
+    } else {
+        "No coding assistant processes detected."
+    }
+}
+
+fn workload_row(
+    item: &workloads::Workload,
+    extras: &providers::Extras,
+    tab: usize,
+    color: u32,
+    expanded: Signal<String>,
+) -> impl IntoElement {
+    let key = format!("{}:{}:{}", tab, item.name, item.pid);
+    let click_key = key.clone();
+    let open = expanded.get() == key;
+    let ports = workload_ports(extras, item);
+    view()
+        .rounded(px(8.))
+        .bg(rgb(if open { 0x222224 } else { PANEL }))
+        .p_3()
+        .gap_2()
+        .child(
+            workload_row_header(item, &ports, open, tab, color).on_press(move || {
+                motion::layout();
+                expanded.update(|value| {
+                    if *value == click_key {
+                        value.clear();
+                    } else {
+                        *value = click_key.clone();
+                    }
+                });
+            }),
+        )
+        .when(open, |view| view.child(workload_row_details(item)))
+}
+
+fn workload_ports(extras: &providers::Extras, item: &workloads::Workload) -> Vec<String> {
+    extras
+        .listening_ports
+        .iter()
+        .filter(|(pid, _)| item.pids.contains(pid))
+        .map(|(_, port)| port.clone())
+        .collect()
+}
+
+fn workload_row_header(
+    item: &workloads::Workload,
+    ports: &[String],
+    open: bool,
+    tab: usize,
+    color: u32,
+) -> View {
+    view()
+        .flex_row()
+        .flex_wrap()
+        .items_center()
+        .justify_between()
+        .gap_2()
+        .child(workload_identity(item, tab, color))
+        .child(workload_metrics(item, ports, open, color))
+}
+
+fn workload_identity(item: &workloads::Workload, tab: usize, color: u32) -> impl IntoElement {
+    view()
+        .flex_row()
+        .gap_2()
+        .items_center()
+        .child(visuals::badge_icon(tab, color))
+        .child(
             view()
-                .rounded(px(8.))
-                .bg(rgb(if open { 0x222224 } else { PANEL }))
-                .p_3()
-                .gap_2()
-                .child(
-                    view()
-                        .flex_row()
-                        .flex_wrap()
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .on_press(move || {
-                            motion::layout();
-                            expanded.update(|v| {
-                                if *v == click_key {
-                                    v.clear();
-                                } else {
-                                    *v = click_key.clone();
-                                }
-                            });
-                        })
-                        .child(
-                            view()
-                                .flex_row()
-                                .gap_2()
-                                .items_center()
-                                .child(visuals::badge_icon(tab, color))
-                                .child(
-                                    view()
-                                        .gap_1()
-                                        .child(title(item.name.clone(), 0xf2f2f5))
-                                        .child(label(item.detail.clone())),
-                                ),
-                        )
-                        .child(
-                            view()
-                                .flex_row()
-                                .flex_wrap()
-                                .items_center()
-                                .gap_2()
-                                .children(ports.iter().take(5).map(|port| chip(port, color)))
-                                .child(chip(
-                                    if item.cpu < 0.1 { "Low CPU" } else { "Active" },
-                                    if item.cpu < 0.1 { MUTED } else { 0x3abd70 },
-                                ))
-                                .child(label(format!("{:.1}%", item.cpu)))
-                                .child(
-                                    text(gb(item.memory))
-                                        .text_size(px(16.))
-                                        .font_weight(FontWeight::SEMIBOLD),
-                                )
-                                .child(label(if open { "⌄" } else { "›" })),
-                        ),
-                )
-                .when(open, |v| {
-                    v.child(
-                        view()
-                            .gap_2()
-                            .pl_4()
-                            .child(row(
-                                "Longest-running process",
-                                duration(item.started_seconds),
-                            ))
-                            .child(row(
-                                "Observed processes",
-                                item.running_processes.to_string(),
-                            ))
-                            .child(
-                                view().flex_row().flex_wrap().gap_2().children(
-                                    item.pids
-                                        .iter()
-                                        .map(|pid| chip(&format!("PID {}", pid), MUTED)),
-                                ),
-                            ),
-                    )
-                })
-        }))
+                .gap_1()
+                .child(title(item.name.clone(), 0xf2f2f5))
+                .child(label(item.detail.clone())),
+        )
+}
+
+fn workload_metrics(
+    item: &workloads::Workload,
+    ports: &[String],
+    open: bool,
+    color: u32,
+) -> impl IntoElement {
+    view()
+        .flex_row()
+        .flex_wrap()
+        .items_center()
+        .gap_2()
+        .children(ports.iter().take(5).map(|port| chip(port, color)))
+        .child(chip(
+            if item.cpu < 0.1 { "Low CPU" } else { "Active" },
+            if item.cpu < 0.1 { MUTED } else { 0x3abd70 },
+        ))
+        .child(label(format!("{:.1}%", item.cpu)))
+        .child(
+            text(gb(item.memory))
+                .text_size(px(16.))
+                .font_weight(FontWeight::SEMIBOLD),
+        )
+        .child(label(if open { "⌄" } else { "›" }))
+}
+
+fn workload_row_details(item: &workloads::Workload) -> impl IntoElement {
+    view()
+        .gap_2()
+        .pl_4()
+        .child(row(
+            "Longest-running process",
+            duration(item.started_seconds),
+        ))
+        .child(row(
+            "Observed processes",
+            item.running_processes.to_string(),
+        ))
+        .child(
+            view().flex_row().flex_wrap().gap_2().children(
+                item.pids
+                    .iter()
+                    .map(|pid| chip(&format!("PID {}", pid), MUTED)),
+            ),
+        )
 }
 
 fn container_status_color(status: &str) -> u32 {
@@ -728,41 +814,49 @@ fn container_page(extras: Signal<providers::Extras>) -> impl IntoElement {
         .h_full()
         .min_h(px(0.))
         .gap_2()
-        .child(view().flex_shrink_0().child(dynamic(move || {
-            container_summary(&extras.get()).into_element()
-        })))
+        .child(container_summary_panel(extras))
+        .child(container_status_panel(extras))
+        .child(container_list(extras))
+}
+
+fn container_summary_panel(extras: Signal<providers::Extras>) -> impl IntoElement {
+    view().flex_shrink_0().child(dynamic(move || {
+        container_summary(&extras.get()).into_element()
+    }))
+}
+
+fn container_status_panel(extras: Signal<providers::Extras>) -> impl IntoElement {
+    view()
+        .flex_shrink_0()
+        .border_1()
+        .border_color(rgb(0x404046))
+        .rounded(px(8.))
+        .p(px(10.))
+        .gap_2()
+        .child(title("Containers", COLORS[12]))
         .child(
-            view()
-                .flex_shrink_0()
-                .border_1()
-                .border_color(rgb(0x404046))
-                .rounded(px(8.))
-                .p(px(10.))
-                .gap_2()
-                .child(title("Containers", COLORS[12]))
-                .child(
-                    text(move || {
-                        extras.with(|e| {
-                            if e.container_status.is_empty() {
-                                "Discovering Docker engine…".into()
-                            } else {
-                                e.container_status.clone()
-                            }
-                        })
-                    })
-                    .text_size(px(11.))
-                    .text_color(rgb(MUTED)),
-                ),
+            text(move || extras.with(container_status_label))
+                .text_size(px(11.))
+                .text_color(rgb(MUTED)),
         )
-        .child(
-            scroll()
-                .flex_1()
-                .min_h(px(0.))
-                .test_id("containers-list")
-                .child(dynamic(move || {
-                    container_rows(&extras.get()).into_element()
-                })),
-        )
+}
+
+fn container_status_label(extras: &providers::Extras) -> String {
+    if extras.container_status.is_empty() {
+        "Discovering Docker engine…".into()
+    } else {
+        extras.container_status.clone()
+    }
+}
+
+fn container_list(extras: Signal<providers::Extras>) -> impl IntoElement {
+    scroll()
+        .flex_1()
+        .min_h(px(0.))
+        .test_id("containers-list")
+        .child(dynamic(move || {
+            container_rows(&extras.get()).into_element()
+        }))
 }
 fn container_summary(e: &providers::Extras) -> impl IntoElement {
     let reporting = e
@@ -807,71 +901,317 @@ fn container_summary(e: &providers::Extras) -> impl IntoElement {
             COLORS[12],
         ))
 }
-fn container_rows(e: &providers::Extras) -> impl IntoElement {
-    let mut groups: std::collections::BTreeMap<String, Vec<&providers::Container>> =
-        std::collections::BTreeMap::new();
-    for c in &e.containers {
-        groups
-            .entry(if c.project.is_empty() {
-                "Standalone".into()
-            } else {
-                c.project.clone()
-            })
-            .or_default()
-            .push(c);
-    }
-    view().gap_2()
- .children(groups.into_iter().map(|(name,containers)|{
-  let group_memory=containers.iter().map(|c|c.memory_used).sum::<u64>();
-  view().panel().rounded(px(8.)).p_3().gap_3()
-  .child(view().flex_row().justify_between().items_center().gap_2().child(view().flex_1().min_w(px(0.)).gap_1().child(title(name,0xeeeef1)).child(label(format!("{} containers",containers.len())))).child(text(reading(containers.iter().any(|c|c.memory!="Unavailable"),gb(group_memory))).text_size(px(18.))))
-  .children(containers.into_iter().map(|c|{
-   let known=c.memory!="Unavailable"&&!c.memory.is_empty();let usage=c.memory_used as f32/c.memory_limit.max(1) as f32*100.;
-   view().gap_2().border_1().border_color(rgb(0x29292b)).rounded(px(10.)).p_3()
-   .child(view().flex_row().flex_wrap().justify_between().items_center().gap_2()
-    .child(view().flex_1().min_w(px(160.)).gap_1().child(view().flex_row().items_center().gap_2().child(visuals::icon(12,COLORS[12],17.)).child(title(c.name.clone(),0xeeeef1))).child(label(c.image.clone())))
-    .child(view().gap_1().child(text(c.memory.clone()).text_size(px(13.))).child(label(format!("CPU {}",c.cpu)))))
-   .child(view().flex_row().flex_wrap().justify_between().gap_2().child(chip(&c.status,container_status_color(&c.status))).when(!c.ports.is_empty(),|v|v.child(chip(&c.ports,COLORS[12]))))
-   .when(known,|v|v.child(view().flex_row().flex_wrap().items_center().gap_2().child(visuals::progress(usage,if usage>85.{0xe8ac63}else{COLORS[12]},120.)).child(label(format!("{:.1}% of {} limit",usage,gb(c.memory_limit)))).child(label(format!("Transferred ↓ {} / ↑ {}",gb(c.network_rx),gb(c.network_tx))))))
-  }))
- }))
- .when(e.containers.is_empty(),|v|v.child(label("No container rows are available. Start Docker and check access to its configured engine.")))
+fn container_rows(extras: &providers::Extras) -> impl IntoElement {
+    let groups = container_groups(extras);
+    view()
+        .gap_2()
+        .children(
+            groups
+                .into_iter()
+                .map(|(name, containers)| container_group(name, containers)),
+        )
+        .when(extras.containers.is_empty(), |view| {
+            view.child(label(
+                "No container rows are available. Start Docker and check access to its configured engine.",
+            ))
+        })
 }
 
-fn device_page(e: &providers::Extras, tab: usize) -> impl IntoElement {
-    let (heading, value, body) = match tab {
+fn container_groups(
+    extras: &providers::Extras,
+) -> std::collections::BTreeMap<String, Vec<&providers::Container>> {
+    let mut groups: std::collections::BTreeMap<String, Vec<&providers::Container>> =
+        std::collections::BTreeMap::new();
+    for container in &extras.containers {
+        groups
+            .entry(if container.project.is_empty() {
+                "Standalone".into()
+            } else {
+                container.project.clone()
+            })
+            .or_default()
+            .push(container);
+    }
+    groups
+}
+
+fn container_group(name: String, containers: Vec<&providers::Container>) -> impl IntoElement {
+    let memory = containers.iter().map(|c| c.memory_used).sum::<u64>();
+    let reporting = containers.iter().any(|c| container_memory_known(c));
+    let count = containers.len();
+    view()
+        .panel()
+        .rounded(px(8.))
+        .p_3()
+        .gap_3()
+        .child(container_group_header(&name, count, reporting, memory))
+        .children(containers.into_iter().map(container_card))
+}
+
+fn container_group_header(
+    name: &str,
+    count: usize,
+    reporting: bool,
+    memory: u64,
+) -> impl IntoElement {
+    view()
+        .flex_row()
+        .justify_between()
+        .items_center()
+        .gap_2()
+        .child(
+            view()
+                .flex_1()
+                .min_w(px(0.))
+                .gap_1()
+                .child(title(name.to_owned(), 0xeeeef1))
+                .child(label(format!("{} containers", count))),
+        )
+        .child(text(reading(reporting, gb(memory))).text_size(px(18.)))
+}
+
+fn container_card(container: &providers::Container) -> impl IntoElement {
+    let known = container_memory_known(container);
+    let usage = container_usage(container);
+    view()
+        .gap_2()
+        .border_1()
+        .border_color(rgb(0x29292b))
+        .rounded(px(10.))
+        .p_3()
+        .child(container_card_header(container))
+        .child(container_card_status(container))
+        .when(known, |view| {
+            view.child(container_usage_row(container, usage))
+        })
+}
+
+fn container_memory_known(container: &providers::Container) -> bool {
+    container.memory != "Unavailable" && !container.memory.is_empty()
+}
+
+fn container_usage(container: &providers::Container) -> f32 {
+    container.memory_used as f32 / container.memory_limit.max(1) as f32 * 100.
+}
+
+fn container_card_header(container: &providers::Container) -> impl IntoElement {
+    view()
+        .flex_row()
+        .flex_wrap()
+        .justify_between()
+        .items_center()
+        .gap_2()
+        .child(
+            view()
+                .flex_1()
+                .min_w(px(160.))
+                .gap_1()
+                .child(
+                    view()
+                        .flex_row()
+                        .items_center()
+                        .gap_2()
+                        .child(visuals::icon(12, COLORS[12], 17.))
+                        .child(title(container.name.clone(), 0xeeeef1)),
+                )
+                .child(label(container.image.clone())),
+        )
+        .child(
+            view()
+                .gap_1()
+                .child(text(container.memory.clone()).text_size(px(13.)))
+                .child(label(format!("CPU {}", container.cpu))),
+        )
+}
+
+fn container_card_status(container: &providers::Container) -> impl IntoElement {
+    view()
+        .flex_row()
+        .flex_wrap()
+        .justify_between()
+        .gap_2()
+        .child(chip(
+            &container.status,
+            container_status_color(&container.status),
+        ))
+        .when(!container.ports.is_empty(), |view| {
+            view.child(chip(&container.ports, COLORS[12]))
+        })
+}
+
+fn container_usage_row(container: &providers::Container, usage: f32) -> impl IntoElement {
+    view()
+        .flex_row()
+        .flex_wrap()
+        .items_center()
+        .gap_2()
+        .child(visuals::progress(
+            usage,
+            if usage > 85. { 0xe8ac63 } else { COLORS[12] },
+            120.,
+        ))
+        .child(label(format!(
+            "{:.1}% of {} limit",
+            usage,
+            gb(container.memory_limit)
+        )))
+        .child(label(format!(
+            "Transferred ↓ {} / ↑ {}",
+            gb(container.network_rx),
+            gb(container.network_tx)
+        )))
+}
+
+fn device_page(extras: &providers::Extras, tab: usize) -> impl IntoElement {
+    let (heading, value, body) = device_content(extras, tab);
+    view()
+        .flex_1()
+        .h_full()
+        .min_h(px(0.))
+        .gap_2()
+        .child(device_identity_panel(tab, heading, value, body))
+        .when(tab == 7, |view| view.child(device_battery_stats(extras)))
+        .when(tab == 7, |view| view.child(device_battery_cycle(extras)))
+}
+
+fn device_content(extras: &providers::Extras, tab: usize) -> (&'static str, String, &'static str) {
+    match tab {
         5 => (
             "Graphics processor",
-            e.gpu.clone().unwrap_or_else(|| "Unavailable".into()),
+            extras.gpu.clone().unwrap_or_else(|| "Unavailable".into()),
             "Hardware identity is available when the device provider exposes it. Utilization and per-app GPU attribution are not currently collected.",
         ),
         7 => (
             "Battery",
-            e.battery
+            extras
+                .battery
                 .as_ref()
-                .map(|b| b.status.clone())
+                .map(|battery| battery.status.clone())
                 .unwrap_or_else(|| "No battery information".into()),
             "Readings come from the system power service and refresh every 30 seconds.",
         ),
         _ => (
             "Audio output",
-            e.sound
+            extras
+                .sound
                 .clone()
                 .unwrap_or_else(|| "No audio information".into()),
             "Current system output information. Per-app mixing requires a platform audio-routing provider and is not available here.",
         ),
-    };
-    view().flex_1().h_full().min_h(px(0.)).gap_2().child(view().panel().rounded(px(8.)).p_4().gap_3().flex_1().min_h(px(0.))
-  .child(view().flex_row().items_center().gap_2().child(visuals::badge_icon(tab,COLORS[tab])).child(title(heading,0xeeeef1)))
-  .child(text(value).text_size(px(20.)).font_weight(FontWeight::MEDIUM)).child(label(body)))
- .when(tab==7,|v|v.child(view().flex_row().flex_wrap().gap_2()
-  .child(summary_tile("Charge",e.battery.as_ref().map(|b|format!("{:.0}%",b.percent)).unwrap_or_else(||"Unavailable".into()),"Current battery level",COLORS[7]))
-  .child(summary_tile("Remaining",e.battery.as_ref().and_then(|b|b.remaining.clone()).unwrap_or_else(||"Unavailable".into()),"System estimate",COLORS[7]))
-  .child(summary_tile("Health",e.battery.as_ref().and_then(|b|b.health).map(|v|format!("{:.0}%",v)).unwrap_or_else(||"Unavailable".into()),"Full capacity / design capacity",COLORS[7]))
-  .child(summary_tile("Power draw",e.battery.as_ref().and_then(|b|b.power_w).map(|v|format!("{:.1} W",v)).unwrap_or_else(||"Unavailable".into()),"Reported battery power",COLORS[7]))))
- .when(tab==7,|v|v.child(view().border_1().border_color(rgb(0x404046)).rounded(px(8.)).p_3().gap_2()
-  .child(row("Cycle count",e.battery.as_ref().and_then(|b|b.cycles).map(|v|v.to_string()).unwrap_or_else(||"Unavailable".into())))
- ))
+    }
+}
+
+fn device_identity_panel(
+    tab: usize,
+    heading: &'static str,
+    value: String,
+    body: &'static str,
+) -> impl IntoElement {
+    view()
+        .panel()
+        .rounded(px(8.))
+        .p_4()
+        .gap_3()
+        .flex_1()
+        .min_h(px(0.))
+        .child(
+            view()
+                .flex_row()
+                .items_center()
+                .gap_2()
+                .child(visuals::badge_icon(tab, COLORS[tab]))
+                .child(title(heading, 0xeeeef1)),
+        )
+        .child(
+            text(value)
+                .text_size(px(20.))
+                .font_weight(FontWeight::MEDIUM),
+        )
+        .child(label(body))
+}
+
+fn device_battery_stats(extras: &providers::Extras) -> impl IntoElement {
+    view()
+        .flex_row()
+        .flex_wrap()
+        .gap_2()
+        .child(summary_tile(
+            "Charge",
+            battery_charge(extras),
+            "Current battery level",
+            COLORS[7],
+        ))
+        .child(summary_tile(
+            "Remaining",
+            battery_remaining(extras),
+            "System estimate",
+            COLORS[7],
+        ))
+        .child(summary_tile(
+            "Health",
+            battery_health(extras),
+            "Full capacity / design capacity",
+            COLORS[7],
+        ))
+        .child(summary_tile(
+            "Power draw",
+            battery_power(extras),
+            "Reported battery power",
+            COLORS[7],
+        ))
+}
+
+fn battery_charge(extras: &providers::Extras) -> String {
+    extras
+        .battery
+        .as_ref()
+        .map(|battery| format!("{:.0}%", battery.percent))
+        .unwrap_or_else(|| "Unavailable".into())
+}
+
+fn battery_remaining(extras: &providers::Extras) -> String {
+    extras
+        .battery
+        .as_ref()
+        .and_then(|battery| battery.remaining.clone())
+        .unwrap_or_else(|| "Unavailable".into())
+}
+
+fn battery_health(extras: &providers::Extras) -> String {
+    extras
+        .battery
+        .as_ref()
+        .and_then(|battery| battery.health)
+        .map(|value| format!("{value:.0}%"))
+        .unwrap_or_else(|| "Unavailable".into())
+}
+
+fn battery_power(extras: &providers::Extras) -> String {
+    extras
+        .battery
+        .as_ref()
+        .and_then(|battery| battery.power_w)
+        .map(|value| format!("{value:.1} W"))
+        .unwrap_or_else(|| "Unavailable".into())
+}
+
+fn device_battery_cycle(extras: &providers::Extras) -> impl IntoElement {
+    view()
+        .border_1()
+        .border_color(rgb(0x404046))
+        .rounded(px(8.))
+        .p_3()
+        .gap_2()
+        .child(row("Cycle count", battery_cycles(extras)))
+}
+
+fn battery_cycles(extras: &providers::Extras) -> String {
+    extras
+        .battery
+        .as_ref()
+        .and_then(|battery| battery.cycles)
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "Unavailable".into())
 }
 
 #[cfg(any(target_os = "ios", target_os = "android"))]
@@ -979,75 +1319,96 @@ fn record_sample_times(old: &Sample, next: &mut Sample) {
     );
 }
 fn volume_network_panel(data: Signal<Sample>, tab: usize) -> impl IntoElement {
-    let rows =
-        dynamic(move || {
-            let s = data.get();
-            view()
-                .gap_2()
-                .when(tab == 3, |v| {
-                    v.children(s.volumes.iter().map(|(name, total, free)| {
-                        row(name, format!("{} free / {}", gb(*free), gb(*total)))
-                    }))
-                })
-                .when(tab == 4, |v| {
-                    v.children(s.interfaces.iter().map(|(name, rx, tx)| {
-                        row(name, format!("↓ {}    ↑ {}", rate(*rx), rate(*tx)))
-                    }))
-                })
-                .into_element()
-        });
     view()
         .panel()
         .rounded(px(8.))
         .p(px(10.))
         .gap_2()
-        .when(is_desktop(), |v| v.flex_1().min_h(px(0.)))
-        .when(tab == 3, |v| {
-            v.child(
-                view()
-                    .flex_shrink_0()
-                    .flex_row()
-                    .flex_wrap()
-                    .gap_3()
-                    .child(
-                        text(move || {
-                            data.with(|s| {
-                                format!("Read {}", reading(s.disk_io_available, rate(s.disk_read)))
-                            })
-                        })
-                        .text_size(px(12.)),
-                    )
-                    .child(
-                        text(move || {
-                            data.with(|s| {
-                                format!(
-                                    "Write {}",
-                                    reading(s.disk_io_available, rate(s.disk_write))
-                                )
-                            })
-                        })
-                        .text_size(px(12.)),
-                    ),
-            )
-        })
-        .child(view().flex_shrink_0().child(title(
-            if tab == 3 {
-                "Volumes"
-            } else {
-                "Network interfaces"
-            },
-            COLORS[tab],
-        )))
-        .child(if is_desktop() {
-            scroll()
-                .flex_1()
-                .min_h(px(0.))
-                .test_id("volume-interfaces-list")
-                .child(rows)
-                .into_element()
+        .when(is_desktop(), |view| view.flex_1().min_h(px(0.)))
+        .when(tab == 3, |view| view.child(disk_io_summary(data)))
+        .child(volume_network_heading(tab))
+        .child(volume_network_rows(data, tab))
+}
+
+fn disk_io_summary(data: Signal<Sample>) -> impl IntoElement {
+    view()
+        .flex_shrink_0()
+        .flex_row()
+        .flex_wrap()
+        .gap_3()
+        .child(text(move || data.with(disk_read_label)).text_size(px(12.)))
+        .child(text(move || data.with(disk_write_label)).text_size(px(12.)))
+}
+
+fn disk_read_label(sample: &Sample) -> String {
+    format!(
+        "Read {}",
+        reading(sample.disk_io_available, rate(sample.disk_read))
+    )
+}
+
+fn disk_write_label(sample: &Sample) -> String {
+    format!(
+        "Write {}",
+        reading(sample.disk_io_available, rate(sample.disk_write))
+    )
+}
+
+fn volume_network_heading(tab: usize) -> impl IntoElement {
+    view().flex_shrink_0().child(title(
+        if tab == 3 {
+            "Volumes"
         } else {
-            view().child(rows).into_element()
-        })
+            "Network interfaces"
+        },
+        COLORS[tab],
+    ))
+}
+
+fn volume_network_rows(data: Signal<Sample>, tab: usize) -> impl IntoElement {
+    if is_desktop() {
+        scroll()
+            .flex_1()
+            .min_h(px(0.))
+            .test_id("volume-interfaces-list")
+            .child(volume_network_list(data, tab))
+            .into_element()
+    } else {
+        view().child(volume_network_list(data, tab)).into_element()
+    }
+}
+
+fn volume_network_list(data: Signal<Sample>, tab: usize) -> impl IntoElement {
+    dynamic(move || {
+        let sample = data.get();
+        view()
+            .gap_2()
+            .when(tab == 3, |view| {
+                view.children(
+                    sample
+                        .volumes
+                        .iter()
+                        .map(|(name, total, free)| volume_row(name, *total, *free)),
+                )
+            })
+            .when(tab == 4, |view| {
+                view.children(
+                    sample
+                        .interfaces
+                        .iter()
+                        .map(|(name, rx, tx)| interface_row(name, *rx, *tx)),
+                )
+            })
+            .into_element()
+    })
+}
+
+fn volume_row(name: &str, total: u64, free: u64) -> impl IntoElement {
+    row(name, format!("{} free / {}", gb(free), gb(total)))
+}
+
+fn interface_row(name: &str, rx: u64, tx: u64) -> impl IntoElement {
+    row(name, format!("↓ {}    ↑ {}", rate(rx), rate(tx)))
 }
 
 fn bluetooth_page(extras: Signal<providers::Extras>) -> impl IntoElement {
@@ -1059,44 +1420,51 @@ fn bluetooth_page(extras: Signal<providers::Extras>) -> impl IntoElement {
         .flex_1()
         .h_full()
         .min_h(px(0.))
-        .child(
-            view()
-                .flex_shrink_0()
-                .child(title("Bluetooth devices", COLORS[9])),
-        )
-        .child(
-            view().flex_shrink_0().child(
-                text(move || {
-                    extras.with(|e| {
-                        if e.bluetooth_status.is_empty() {
-                            "Discovering available devices…".into()
-                        } else {
-                            e.bluetooth_status.clone()
-                        }
-                    })
-                })
-                .text_size(px(11.))
-                .text_color(rgb(MUTED)),
-            ),
-        )
-        .child(
-            scroll()
-                .flex_1()
-                .min_h(px(0.))
-                .test_id("bluetooth-list")
-                .child(dynamic(move || {
-                    view()
-                        .gap_2()
-                        .children(
-                            extras
-                                .get()
-                                .bluetooth
-                                .into_iter()
-                                .map(|name| view().py_3().child(text(name).text_size(px(16.)))),
-                        )
-                        .into_element()
-                })),
-        )
+        .child(bluetooth_header())
+        .child(bluetooth_status(extras))
+        .child(bluetooth_list(extras))
+}
+
+fn bluetooth_header() -> impl IntoElement {
+    view()
+        .flex_shrink_0()
+        .child(title("Bluetooth devices", COLORS[9]))
+}
+
+fn bluetooth_status(extras: Signal<providers::Extras>) -> impl IntoElement {
+    view().flex_shrink_0().child(
+        text(move || extras.with(bluetooth_status_label))
+            .text_size(px(11.))
+            .text_color(rgb(MUTED)),
+    )
+}
+
+fn bluetooth_status_label(extras: &providers::Extras) -> String {
+    if extras.bluetooth_status.is_empty() {
+        "Discovering available devices…".into()
+    } else {
+        extras.bluetooth_status.clone()
+    }
+}
+
+fn bluetooth_list(extras: Signal<providers::Extras>) -> impl IntoElement {
+    scroll()
+        .flex_1()
+        .min_h(px(0.))
+        .test_id("bluetooth-list")
+        .child(dynamic(move || {
+            bluetooth_rows(extras.get().bluetooth).into_element()
+        }))
+}
+
+fn bluetooth_rows(devices: Vec<String>) -> impl IntoElement {
+    view()
+        .gap_2()
+        .children(devices.into_iter().map(bluetooth_row))
+}
+
+fn bluetooth_row(name: String) -> impl IntoElement {
+    view().py_3().child(text(name).text_size(px(16.)))
 }
 
 fn history_push<T: Copy>(old: &[T], value: Option<T>) -> Vec<T> {
@@ -1110,163 +1478,181 @@ fn history_push<T: Copy>(old: &[T], value: Option<T>) -> Vec<T> {
     result
 }
 
-fn detail_stats(s: &Sample, tab: usize) -> impl IntoElement {
-    let top = if tab == 2 {
-        s.apps.iter().max_by_key(|a| a.memory)
-    } else {
-        s.apps.iter().max_by(|a, b| a.cpu.total_cmp(&b.cpu))
-    };
-    let peak = s.history.iter().copied().fold(0_f32, f32::max);
-    let avg = s.history.iter().sum::<f32>() / s.history.len().max(1) as f32;
-    let stats: Vec<(&str, String, String)> = match tab {
-        1 => vec![
-            (
-                "Average",
-                reading(
-                    s.cpu_available && !s.history.is_empty(),
-                    format!("{:.1}%", avg),
-                ),
-                "Since launch · last 60 samples".into(),
-            ),
-            (
-                "Peak",
-                reading(
-                    s.cpu_available && !s.history.is_empty(),
-                    format!("{:.1}%", peak),
-                ),
-                "Last 60 samples".into(),
-            ),
-            (
-                "Cores",
-                reading(s.cores > 0, s.cores.to_string()),
-                "Logical processors".into(),
-            ),
-            (
-                "Top app",
-                top.map_or("Unavailable".into(), |a| a.name.clone()),
-                top.map_or("Restricted or no data".into(), |a| {
-                    format!("{:.1}% CPU", a.cpu)
-                }),
-            ),
-        ],
-        2 => vec![
-            (
-                "Physical memory",
-                reading(s.total > 0, gb(s.total)),
-                "Device capacity".into(),
-            ),
-            (
-                "Used",
-                reading(s.memory_available, gb(s.memory)),
-                if cfg!(any(target_os = "ios", target_os = "android")) {
-                    "Resident memory".into()
-                } else {
-                    "System memory".into()
-                },
-            ),
-            (
-                "Available",
-                if cfg!(any(target_os = "ios", target_os = "android")) {
-                    "Restricted".into()
-                } else {
-                    reading(s.memory_available, gb(s.total.saturating_sub(s.memory)))
-                },
-                "System memory".into(),
-            ),
-            (
-                "Top app",
-                top.map_or("Unavailable".into(), |a| a.name.clone()),
-                top.map_or("Restricted or no data".into(), |a| gb(a.memory)),
-            ),
-        ],
-        3 => vec![
-            (
-                "Used",
-                reading(s.disk_available, gb(s.disk.saturating_sub(s.free))),
-                "Selected volume".into(),
-            ),
-            (
-                "Free",
-                reading(s.disk_available, gb(s.free)),
-                "Available storage".into(),
-            ),
-            (
-                "Capacity",
-                reading(s.disk_available, gb(s.disk)),
-                "Selected volume".into(),
-            ),
-            (
-                "Volumes",
-                reading(s.disk_available, s.volumes.len().to_string()),
-                "Visible mounted volumes".into(),
-            ),
-        ],
-        _ => vec![
-            (
-                "Downloading",
-                reading(s.network_available, rate(s.rx)),
-                "All visible interfaces".into(),
-            ),
-            (
-                "Uploading",
-                reading(s.network_available, rate(s.tx)),
-                "All visible interfaces".into(),
-            ),
-            (
-                "Interfaces",
-                reading(s.network_available, s.interfaces.len().to_string()),
-                "Loopback excluded".into(),
-            ),
-            (
-                "Peak download",
-                reading(
-                    s.network_available && !s.network_history.is_empty(),
-                    rate(s.network_history.iter().copied().fold(0_f32, f32::max) as u64),
-                ),
-                "Last 60 samples · graph auto scales".into(),
-            ),
-        ],
-    };
+struct Stat {
+    heading: &'static str,
+    value: String,
+    note: String,
+}
+
+fn detail_stats(sample: &Sample, tab: usize) -> impl IntoElement {
     let compact = is_desktop() && window().width.0 < 900.;
     view()
         .flex_row()
         .flex_wrap()
         .gap(px(if compact { 8. } else { 12. }))
         .children(
-            stats
+            detail_stat_values(sample, tab)
                 .into_iter()
-                .filter(|(heading, _, _)| {
-                    is_desktop() || !matches!(*heading, "Top app" | "Available")
-                })
-                .map(|(heading, value, note)| {
-                    view()
-                        .flex_1()
-                        .min_w(px(if compact {
-                            ((window().width.0 - 40.) / 2.).max(0.)
-                        } else {
-                            200.
-                        }))
-                        .panel()
-                        .rounded(px(8.))
-                        .when(compact, |v| {
-                            v.h(px(44.))
-                                .flex_row()
-                                .items_center()
-                                .justify_between()
-                                .px(px(10.))
-                                .gap_2()
-                        })
-                        .when(!compact, |v| v.p_3().gap_2())
-                        .tooltip(crate::hint(note.clone()))
-                        .child(title(heading, COLORS[tab]))
-                        .child(
-                            text(value)
-                                .text_size(px(if compact { 14. } else { 22. }))
-                                .font_weight(FontWeight::SEMIBOLD),
-                        )
-                        .when(!compact, |v| v.child(label(note)))
-                }),
+                .filter(|stat| is_desktop() || !matches!(stat.heading, "Top app" | "Available"))
+                .map(|stat| detail_stat_tile(stat, tab, compact)),
         )
+}
+
+fn detail_stat_values(sample: &Sample, tab: usize) -> Vec<Stat> {
+    let top = if tab == 2 {
+        sample.apps.iter().max_by_key(|app| app.memory)
+    } else {
+        sample.apps.iter().max_by(|a, b| a.cpu.total_cmp(&b.cpu))
+    };
+    let peak = sample.history.iter().copied().fold(0_f32, f32::max);
+    let average = sample.history.iter().sum::<f32>() / sample.history.len().max(1) as f32;
+    match tab {
+        1 => vec![
+            Stat {
+                heading: "Average",
+                value: reading(
+                    sample.cpu_available && !sample.history.is_empty(),
+                    format!("{:.1}%", average),
+                ),
+                note: "Since launch · last 60 samples".into(),
+            },
+            Stat {
+                heading: "Peak",
+                value: reading(
+                    sample.cpu_available && !sample.history.is_empty(),
+                    format!("{:.1}%", peak),
+                ),
+                note: "Last 60 samples".into(),
+            },
+            Stat {
+                heading: "Cores",
+                value: reading(sample.cores > 0, sample.cores.to_string()),
+                note: "Logical processors".into(),
+            },
+            Stat {
+                heading: "Top app",
+                value: top.map_or("Unavailable".into(), |app| app.name.clone()),
+                note: top.map_or("Restricted or no data".into(), |app| {
+                    format!("{:.1}% CPU", app.cpu)
+                }),
+            },
+        ],
+        2 => vec![
+            Stat {
+                heading: "Physical memory",
+                value: reading(sample.total > 0, gb(sample.total)),
+                note: "Device capacity".into(),
+            },
+            Stat {
+                heading: "Used",
+                value: reading(sample.memory_available, gb(sample.memory)),
+                note: if cfg!(any(target_os = "ios", target_os = "android")) {
+                    "Resident memory".into()
+                } else {
+                    "System memory".into()
+                },
+            },
+            Stat {
+                heading: "Available",
+                value: if cfg!(any(target_os = "ios", target_os = "android")) {
+                    "Restricted".into()
+                } else {
+                    reading(
+                        sample.memory_available,
+                        gb(sample.total.saturating_sub(sample.memory)),
+                    )
+                },
+                note: "System memory".into(),
+            },
+            Stat {
+                heading: "Top app",
+                value: top.map_or("Unavailable".into(), |app| app.name.clone()),
+                note: top.map_or("Restricted or no data".into(), |app| gb(app.memory)),
+            },
+        ],
+        3 => vec![
+            Stat {
+                heading: "Used",
+                value: reading(
+                    sample.disk_available,
+                    gb(sample.disk.saturating_sub(sample.free)),
+                ),
+                note: "Selected volume".into(),
+            },
+            Stat {
+                heading: "Free",
+                value: reading(sample.disk_available, gb(sample.free)),
+                note: "Available storage".into(),
+            },
+            Stat {
+                heading: "Capacity",
+                value: reading(sample.disk_available, gb(sample.disk)),
+                note: "Selected volume".into(),
+            },
+            Stat {
+                heading: "Volumes",
+                value: reading(sample.disk_available, sample.volumes.len().to_string()),
+                note: "Visible mounted volumes".into(),
+            },
+        ],
+        _ => vec![
+            Stat {
+                heading: "Downloading",
+                value: reading(sample.network_available, rate(sample.rx)),
+                note: "All visible interfaces".into(),
+            },
+            Stat {
+                heading: "Uploading",
+                value: reading(sample.network_available, rate(sample.tx)),
+                note: "All visible interfaces".into(),
+            },
+            Stat {
+                heading: "Interfaces",
+                value: reading(
+                    sample.network_available,
+                    sample.interfaces.len().to_string(),
+                ),
+                note: "Loopback excluded".into(),
+            },
+            Stat {
+                heading: "Peak download",
+                value: reading(
+                    sample.network_available && !sample.network_history.is_empty(),
+                    rate(sample.network_history.iter().copied().fold(0_f32, f32::max) as u64),
+                ),
+                note: "Last 60 samples · graph auto scales".into(),
+            },
+        ],
+    }
+}
+
+fn detail_stat_tile(stat: Stat, tab: usize, compact: bool) -> impl IntoElement {
+    view()
+        .flex_1()
+        .min_w(px(if compact {
+            ((window().width.0 - 40.) / 2.).max(0.)
+        } else {
+            200.
+        }))
+        .panel()
+        .rounded(px(8.))
+        .when(compact, |view| {
+            view.h(px(44.))
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .px(px(10.))
+                .gap_2()
+        })
+        .when(!compact, |view| view.p_3().gap_2())
+        .tooltip(crate::hint(stat.note.clone()))
+        .child(title(stat.heading, COLORS[tab]))
+        .child(
+            text(stat.value)
+                .text_size(px(if compact { 14. } else { 22. }))
+                .font_weight(FontWeight::SEMIBOLD),
+        )
+        .when(!compact, |view| view.child(label(stat.note)))
 }
 
 fn reading(available: bool, value: String) -> String {
@@ -1291,35 +1677,6 @@ fn select_volume<'a>(
         .iter()
         .find(|v| normalize(&v.0) == desired)
         .or_else(|| volumes.first())
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn unavailable_readings_never_look_like_successful_zero() {
-        assert_eq!(reading(false, "0 GB".into()), "Unavailable");
-        assert_eq!(reading(true, "0 kB/s".into()), "0 kB/s");
-    }
-    #[test]
-    fn container_status_only_marks_healthy_running_states_green() {
-        assert_eq!(container_status_color("Up 2 hours (healthy)"), 0x8cbf96);
-        assert_eq!(container_status_color("Up 2 hours (unhealthy)"), 0xe97979);
-        assert_eq!(
-            container_status_color("Restarting (1) 30 seconds ago"),
-            0xe5ad61
-        );
-        assert_eq!(container_status_color("Up 2 hours (Paused)"), 0xe5ad61);
-        assert_eq!(container_status_color("Exited (1)"), MUTED);
-    }
-    #[cfg(not(target_os = "ios"))]
-    #[test]
-    fn primary_volume_matches_windows_drive_and_unix_root() {
-        let v = vec![("D:\\".into(), 10, 5), ("C:\\".into(), 20, 7)];
-        assert_eq!(select_volume(&v, "c:").unwrap().1, 20);
-        assert_eq!(select_volume(&v, "D:").unwrap().1, 10);
-        let v = vec![("/mnt/data".into(), 10, 5), ("/".into(), 20, 7)];
-        assert_eq!(select_volume(&v, "/").unwrap().1, 20);
-    }
 }
 fn chip(text_value: &str, color: u32) -> impl IntoElement + use<> {
     view()
@@ -1376,4 +1733,37 @@ fn hint(message: impl Into<String>) -> impl IntoElement + nsh_core::element::Int
         .py(px(5.))
         .rounded(px(5.))
         .child(text(message.into()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unavailable_readings_never_look_like_successful_zero() {
+        assert_eq!(reading(false, "0 GB".into()), "Unavailable");
+        assert_eq!(reading(true, "0 kB/s".into()), "0 kB/s");
+    }
+
+    #[test]
+    fn container_status_only_marks_healthy_running_states_green() {
+        assert_eq!(container_status_color("Up 2 hours (healthy)"), 0x8cbf96);
+        assert_eq!(container_status_color("Up 2 hours (unhealthy)"), 0xe97979);
+        assert_eq!(
+            container_status_color("Restarting (1) 30 seconds ago"),
+            0xe5ad61
+        );
+        assert_eq!(container_status_color("Up 2 hours (Paused)"), 0xe5ad61);
+        assert_eq!(container_status_color("Exited (1)"), MUTED);
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    #[test]
+    fn primary_volume_matches_windows_drive_and_unix_root() {
+        let v = vec![("D:\\".into(), 10, 5), ("C:\\".into(), 20, 7)];
+        assert_eq!(select_volume(&v, "c:").unwrap().1, 20);
+        assert_eq!(select_volume(&v, "D:").unwrap().1, 10);
+        let v = vec![("/mnt/data".into(), 10, 5), ("/".into(), 20, 7)];
+        assert_eq!(select_volume(&v, "/").unwrap().1, 20);
+    }
 }
