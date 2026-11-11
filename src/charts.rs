@@ -816,7 +816,7 @@ pub fn plot_with_options(
         measured_width.try_set(bounds.size.width.0);
         measured_height.try_set(bounds.size.height.0);
     })
-    .on_mouse_move(move |point: &Point<Points>| mouse_select(point.x.0))
+    .on_mouse_move(move |event: &nsh_core::MouseEvent| mouse_select(event.position.x.0))
     .on_touch(move |event: &nsh_core::TouchEvent| {
         if matches!(
             event.phase,
@@ -844,7 +844,7 @@ pub fn plot_with_options(
     .on_responder_terminate(move |_: &nsh_core::element::ResponderEvent| {
         cursor.try_set(None);
     })
-    .on_hover_out(move || {
+    .on_mouse_leave(move |_: &nsh_core::MouseEvent| {
         cursor.try_set(None);
     });
     view()
