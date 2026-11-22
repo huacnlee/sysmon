@@ -319,10 +319,18 @@ fn sort_control(
                         }
                     })
                     .bg(move || rgb(0x29292c).opacity(if selected.get() { 0.9 } else { 0. }))
-                    .shadow_color(rgb(0x000000))
-                    .shadow_opacity(move || if selected.get() { 0.20_f32 } else { 0_f32 })
-                    .shadow_radius(px(3.))
-                    .shadow_offset(Point::new(px(0.), px(2.)))
+                    .inline_style(move || {
+                        nsh_core::element::Style::default().with(
+                            nsh_core::StyleKey::BoxShadow,
+                            nsh_core::StyleKey::BoxShadow
+                                .parse_value(nsh_core::StyleValue::Str(if selected.get() {
+                                    "0 2px 3px #00000033"
+                                } else {
+                                    "none"
+                                }))
+                                .unwrap_or(nsh_core::PropertyValue::Default),
+                        )
+                    })
                     .child(
                         view()
                             .absolute()

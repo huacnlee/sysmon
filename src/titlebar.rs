@@ -1,11 +1,20 @@
 //! Desktop navigation and persistent telemetry share the app-owned title bar.
-use nsh_core::{desktop::TitleBarStyle, element::desktop, prelude::*};
+use nsh_core::{
+    desktop::{TitleBarOptions, TitleBarStyle, WindowAttributes},
+    element::desktop,
+    prelude::*,
+};
 
 pub fn install() {
     set_color_scheme(Appearance::Dark);
     effect(|| {
         if is_desktop() {
-            desktop::set_title_bar(TitleBarStyle::Hidden, Some(px(40.)));
+            let mut title_bar = TitleBarOptions::default();
+            title_bar.style = TitleBarStyle::Hidden;
+            title_bar.height = Some(px(40.));
+            let mut attributes = WindowAttributes::default();
+            attributes.title_bar = Some(title_bar);
+            desktop::current_window().set(attributes);
         }
     });
 }

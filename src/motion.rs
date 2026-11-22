@@ -10,6 +10,7 @@ pub fn enter<S: Styled + Element>(element: S, delay: f32) -> S {
                 duration_ms: 360.,
                 delay_ms: delay,
                 easing: Easing::EaseOut,
+                frame_rate: None,
             },
         );
     }
