@@ -35,10 +35,10 @@ Archives appear in `.nsh/dist`. Pushing a matching version tag builds both platf
 
 ## Development
 
-Install Rust stable and the pinned NSH 0.3.0 CLI, plus the platform SDKs described in [PLATFORMS.md](PLATFORMS.md).
+Install Rust stable and the NSH nightly CLI, plus the platform SDKs described in [PLATFORMS.md](PLATFORMS.md).
 
 ```sh
-cargo install --git https://github.com/longbridge/nsh --rev 76fa8a7fed47ea51aea01fa85bb40960be15d984 --locked nsh-cli
+cargo install --git https://github.com/longbridge/nsh --tag nightly --locked nsh-cli
 cargo run                         # native desktop
 nsh run --target macos
 nsh run --target windows
@@ -89,9 +89,9 @@ nsh package --target macos
 nsh package --target windows
 nsh package --target linux
 nsh package --target ios-simulator
-python3 scripts/package-android.py --out .nsh/out/android
+nsh package --target android
 ```
 
 Signed iOS device packages require a signing identity and provisioning profile. See [PLATFORMS.md](PLATFORMS.md) for platform requirements and commands. Generated runners, packages and local test captures are stored under `.nsh/`; Cargo builds stay under `target/`.
 
-Android packages use the project helper above (Python 3.11+, Git, Cargo, JDK 17+ and the Android SDK/NDK). It applies the checked [NSH status-bar patch](patches/nsh-android-status-bar.patch) to an ignored copy of the pinned Java runtime, so resizing and rotation preserve the app's status-bar appearance. The NSH checkout and Cargo sources stay unchanged. Signing flags such as `--keystore` and `--key-alias` are forwarded to NSH; use `NSH_KEYSTORE_PASSWORD` for its password. Add `--abi x86_64` for an x86 emulator or repeat `--abi` to include multiple architectures. The unpatched `nsh run --target android` development runtime can still reproduce this upstream issue.
+Android packages need JDK 17+ and the Android SDK/NDK. Pass signing flags such as `--keystore` and `--key-alias` to `nsh package`, with `NSH_KEYSTORE_PASSWORD` for the password.
