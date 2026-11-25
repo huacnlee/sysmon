@@ -1,4 +1,5 @@
 //! Desktop navigation and persistent telemetry share the app-owned title bar.
+use nsh_icon_lucide::Lucide;
 use nsh_core::{
     desktop::{TitleBarOptions, TitleBarStyle, WindowAttributes},
     element::desktop,
@@ -7,16 +8,16 @@ use nsh_core::{
 
 pub fn install() {
     set_color_scheme(Appearance::Dark);
-    effect(|| {
-        if is_desktop() {
-            let mut title_bar = TitleBarOptions::default();
-            title_bar.style = TitleBarStyle::Hidden;
-            title_bar.height = Some(px(40.));
-            let mut attributes = WindowAttributes::default();
-            attributes.title_bar = Some(title_bar);
-            desktop::current_window().set(attributes);
-        }
-    });
+}
+
+/// The main window draws its own 40-point title bar ([`bar`]).
+pub fn window_attributes() -> WindowAttributes {
+    let mut title_bar = TitleBarOptions::default();
+    title_bar.style = TitleBarStyle::Hidden;
+    title_bar.height = Some(px(40.));
+    let mut attributes = WindowAttributes::default();
+    attributes.title_bar = Some(title_bar);
+    attributes
 }
 
 /// The primary destinations remain visible as icons with their live readings.
@@ -225,9 +226,11 @@ fn io_reading(data: Signal<crate::Sample>, read: bool) -> impl IntoElement {
         .items_center()
         .gap(px(3.))
         .child(
-            text(if read { "↓" } else { "↑" })
-                .text_size(px(10.))
-                .text_color(rgb(crate::MUTED)),
+            crate::visuals::glyph(
+                if read { Lucide::ArrowDown } else { Lucide::ArrowUp },
+                crate::MUTED,
+                10.,
+            ),
         )
         .child(crate::motion::small_metric(move || {
             data.with(|s| {
@@ -263,22 +266,7 @@ fn more_menu(tab: Signal<usize>) -> impl IntoElement {
                 .tooltip(crate::hint("More"))
                 .hover(|s| s.bg(rgb(0x18181a)))
                 .child(
-                    canvas(
-                        Painter::new()
-                            .fill_color(rgb(0xb6b6bf))
-                            .begin_path()
-                            .arc(3., 8., 1.4, 0., std::f32::consts::TAU)
-                            .fill()
-                            .begin_path()
-                            .arc(8., 8., 1.4, 0., std::f32::consts::TAU)
-                            .fill()
-                            .begin_path()
-                            .arc(13., 8., 1.4, 0., std::f32::consts::TAU)
-                            .fill(),
-                    )
-                    .w(px(16.))
-                    .h(px(16.))
-                    .accessible(false),
+                    crate::visuals::glyph(Lucide::Ellipsis, 0xb6b6bf, 16.),
                 )
                 .child(selection(tab, None)),
         )

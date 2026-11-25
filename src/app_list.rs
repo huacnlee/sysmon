@@ -3,6 +3,7 @@
 use crate::PanelSurface;
 use nsh_core::prelude::*;
 use nsh_core::{LayoutAnimation, LayoutCurve, LayoutTransition};
+use nsh_icon_lucide::{Lucide, icon};
 use std::rc::Rc;
 
 use crate::{COLORS, MUTED, Sample, apps::AppUsage, gb};
@@ -86,9 +87,9 @@ pub fn compact_from_data(data: Signal<Sample>, memory: bool) -> impl IntoElement
         .child(
             heading(
                 if memory {
-                    "⊞  Memory by app"
+                    "Memory by app"
                 } else {
-                    "⊞  CPU by app"
+                    "CPU by app"
                 },
                 color,
             )
@@ -211,7 +212,7 @@ fn table_source(source: Rc<dyn Fn() -> Vec<AppUsage>>, memory: bool) -> impl Int
     view().flex_1().min_h(px(0.)).min_w(px(0.)).w_full()
         .panel().rounded(px(8.)).p(px(12.)).gap(px(10.))
         .child(view().flex_shrink_0().flex_row().flex_wrap().items_center().justify_between().gap_3()
-            .child(heading(if memory {"⊞  Memory by app"} else {"⊞  CPU by app"}, color))
+            .child(heading(if memory {"Memory by app"} else {"CPU by app"}, color))
             .child(text(move || {
                 let total=all.with(Vec::len); let count=rows.with(Vec::len);
                 if count==total { format!("{} applications",count) } else { format!("{} of {} applications",count,total) }
@@ -247,10 +248,7 @@ fn search_control(query: Signal<String>, list_ref: ElementRef) -> impl IntoEleme
         .border_color(move||if focused.get(){rgb(0xffffff).opacity(0.24)}else{rgb(0xffffff).opacity(0.10)})
         .transition_colors().duration(move||if reduce_motion(){0_f32}else{140_f32})
         .on_press(move||field.focus())
-        .child(canvas(Painter::new().stroke_color(rgb(MUTED)).line_width(1.5)
-            .line_cap(nsh_core::canvas::LineCap::Round)
-            .stroke_svg("M10.5 6.25A4.25 4.25 0 1 1 2 6.25A4.25 4.25 0 1 1 10.5 6.25 M9.3 9.3L13 13"))
-            .w(px(14.)).h(px(14.)).flex_shrink_0().accessible(false))
+        .child(crate::visuals::glyph(Lucide::Search, MUTED, 14.))
         .child(nsh_base::input().flex_1().min_w(px(0.)).h(px(30.)).px(px(0.)).py(px(0.))
             .border(px(0.)).bg(rgb(0x000000).opacity(0.))
             .text_color(rgb(0xeeeef2)).text_size(px(12.))
@@ -265,9 +263,7 @@ fn search_control(query: Signal<String>, list_ref: ElementRef) -> impl IntoEleme
                     .tooltip(crate::hint("Clear search")).hover(|s|s.bg(rgb(0xffffff).opacity(0.07)))
                     .focus(|s|s.outline(px(1.)).outline_color(rgb(0xffffff).opacity(0.35)))
                     .on_press(move||{query.set(String::new());list_ref.scroll_to_offset(px(0.),false);field.focus();})
-                    .child(canvas(Painter::new().stroke_color(rgb(0xa3a8b2)).line_width(1.4)
-                        .line_cap(nsh_core::canvas::LineCap::Round).stroke_svg("M4 4L10 10 M10 4L4 10"))
-                        .w(px(14.)).h(px(14.)).accessible(false).pointer_events(PointerEvents::None))
+                    .child(icon(Lucide::X).size(px(14.)).text_color(rgb(0xa3a8b2)).pointer_events(PointerEvents::None))
             })))
 }
 
@@ -397,18 +393,20 @@ fn sort_control(
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(move || rgb(if selected.get() { 0xe8edf4 } else { MUTED })),
                     )
-                    .child(
-                        text(move || {
-                            if selected.get() {
-                                if descending.get() { "↓" } else { "↑" }
-                            } else {
-                                ""
-                            }
-                        })
-                        .w(px(8.))
-                        .text_size(px(10.))
-                        .text_color(rgb(tint)),
-                    )
+                    .child(view().w(px(10.)).items_center().child(when(
+                        move || selected.get(),
+                        move || {
+                            nsh_icon_lucide::icon(move || {
+                                if descending.get() {
+                                    Lucide::ArrowDown
+                                } else {
+                                    Lucide::ArrowUp
+                                }
+                            })
+                            .size(px(10.))
+                            .text_color(rgb(tint))
+                        },
+                    )))
             }),
         )
 }
@@ -460,7 +458,7 @@ fn resource_row(
                     .child(text(move || app.with(|item|if memory{gb(item.memory)}else{format!("{:.1}%",item.cpu)})).text_size(px(12.)).font_weight(FontWeight::SEMIBOLD))
                     .child(text(move || app.with(|item|if memory{format!("{:.1}% CPU",item.cpu)}else{gb(item.memory)})).text_size(px(11.)).text_color(rgb(MUTED))))
                 .child(live_bar(fraction,color)))
-            .child(text(move || if open.get(){"⌄"}else{"›"}).text_size(px(13.)).text_color(rgb(MUTED))))
+            .child(icon(move || if open.get(){Lucide::ChevronDown}else{Lucide::ChevronRight}).size(px(14.)).text_color(rgb(MUTED))))
         .child(when(move || open.get(), move || view().px(px(10.)).pb(px(10.)).gap(px(10.))
             .child(view().h(px(1.)).bg(rgb(0x35353c)))
             .child(view().flex_row().flex_wrap().gap(px(14.))
@@ -585,8 +583,15 @@ fn muted(value: impl Into<String>) -> impl IntoElement {
     text(value.into()).text_size(px(11.)).text_color(rgb(MUTED))
 }
 fn heading(value: impl Into<String>, color: u32) -> impl IntoElement + Styled {
-    text(value.into())
-        .text_size(px(13.))
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(rgb(color))
+    view()
+        .flex_row()
+        .items_center()
+        .gap(px(8.))
+        .child(crate::visuals::glyph(Lucide::LayoutGrid, color, 14.))
+        .child(
+            text(value.into())
+                .text_size(px(13.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(rgb(color)),
+        )
 }

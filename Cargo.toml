@@ -9,6 +9,8 @@ publish = false
 [dependencies]
 nsh-core = { git = "https://github.com/longbridge/nsh", tag = "nightly" }
 nsh-base = { git = "https://github.com/longbridge/nsh", tag = "nightly" }
+nsh-icon = "0.2.2"
+nsh-icon-lucide = "0.2.2"
 env_logger = "0.11"
 
 [target.'cfg(not(target_os = "ios"))'.dependencies]
@@ -33,3 +35,8 @@ nsh-platform-macos = { git = "https://github.com/longbridge/nsh", tag = "nightly
 
 [target.'cfg(target_os = "windows")'.dependencies]
 nsh-platform-windows = { git = "https://github.com/longbridge/nsh", tag = "nightly", default-features = false }
+
+# nsh-icon depends on nsh-core from crates.io; use the same NSH nightly as the
+# rest of the app so there is only one nsh-core.
+[patch.crates-io]
+nsh-core = { git = "https://github.com/longbridge/nsh", tag = "nightly" }

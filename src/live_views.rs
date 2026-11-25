@@ -7,6 +7,7 @@ use crate::{
     providers::Extras,
     rate, reading, title, visuals,
 };
+use nsh_icon_lucide::Lucide;
 use nsh_core::prelude::*;
 
 fn series(data: Signal<Sample>, index: usize) -> Signal<Vec<f32>> {
@@ -95,7 +96,7 @@ fn card(
                                 .child(visuals::icon(index, COLORS[index], 15.))
                                 .child(title(heading.to_owned(), COLORS[index])),
                         )
-                        .child(text("↗").text_size(px(12.)).text_color(rgb(MUTED))),
+                        .child(visuals::glyph(Lucide::ArrowUpRight, MUTED, 14.)),
                 )
                 .child(
                     view()
@@ -431,7 +432,7 @@ pub fn overview(
                                                     .child(label(caption)),
                                             ),
                                     )
-                                    .child(label("↗")),
+                                    .child(visuals::glyph(Lucide::ArrowUpRight, MUTED, 14.)),
                             ),
                             180. + i as f32 * 45.,
                         )

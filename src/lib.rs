@@ -1,4 +1,5 @@
 //! sysmon: a native, live system dashboard.
+use nsh_icon_lucide::Lucide;
 use nsh_core::prelude::*;
 use std::{sync::mpsc, time::Duration};
 mod app_list;
@@ -47,9 +48,6 @@ const TABS: [&str; 13] = [
     "Projects",
     "Agents",
     "Containers",
-];
-const ICONS: [&str; 13] = [
-    "⊞", "⌘", "▥", "▤", "◎", "▱", "◈", "▰", "♫", "ᛒ", "▱", "♧", "⬡",
 ];
 #[derive(Clone, Default, PartialEq)]
 struct Sample {
@@ -328,7 +326,14 @@ fn unavailable(tab: usize) -> impl IntoElement {
         .rounded(px(8.))
         .p_5()
         .gap_3()
-        .child(title(format!("{}  {}", ICONS[tab], heading), COLORS[tab]))
+        .child(
+            view()
+                .flex_row()
+                .items_center()
+                .gap_2()
+                .child(visuals::icon(tab, COLORS[tab], 15.))
+                .child(title(heading, COLORS[tab])),
+        )
         .child(label(body))
 }
 #[component]
@@ -395,8 +400,15 @@ pub fn App() -> impl IntoElement {
     });
     // OS is fixed for the lifetime of the host. Keep the chosen shell as the
     // direct root so it receives the full viewport rather than a region wrapper.
+    // NSH 0.7: a Rust root declares its desktop window; nothing shows without one.
     if is_desktop() {
-        desktop_shell(tab, paused, expanded_workload, data, extras, ready).into_element()
+        nsh_core::element::desktop::window()
+            .id("main")
+            .title("sysmon")
+            .default_size(Size::new(px(1120.), px(760.)))
+            .attributes(titlebar::window_attributes())
+            .content(move || desktop_shell(tab, paused, expanded_workload, data, extras, ready))
+            .into_element()
     } else {
         mobile::shell(data, extras, paused, ready).into_element()
     }
@@ -679,7 +691,11 @@ fn workload_rows(
                                         .text_size(px(16.))
                                         .font_weight(FontWeight::SEMIBOLD),
                                 )
-                                .child(label(if open { "⌄" } else { "›" })),
+                                .child(visuals::glyph(
+                                    if open { Lucide::ChevronDown } else { Lucide::ChevronRight },
+                                    MUTED,
+                                    14.,
+                                )),
                         ),
                 )
                 .when(open, |v| {
