@@ -32,7 +32,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Linux system libraries
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y clang libclang-dev libgtk-4-dev libglib2.0-bin xvfb
+        run: sudo apt-get update && sudo apt-get install -y clang libclang-dev libgtk-4-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libglib2.0-bin xvfb
       - uses: actions/cache@v4
         with:
           path: |
