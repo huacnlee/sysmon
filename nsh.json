@@ -1,8 +1,8 @@
 {
   "name": "sysmon",
   "id": "dev.sysmon.app",
-  "version": "0.1.6",
-  "build": 8,
+  "version": "0.1.7",
+  "build": 9,
   "appearance": "dark",
   "theme": "theme.json",
   "statusBar": {

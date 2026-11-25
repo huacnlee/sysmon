@@ -28,7 +28,7 @@ To build an archive locally (Python 3.11+, Rust, the NSH nightly CLI and the pla
 
 ```sh
 python3 -m unittest discover -s tests -p 'test_*.py' -v
-python3 scripts/build-release.py --version 0.1.6
+python3 scripts/build-release.py --version 0.1.7
 ```
 
 Archives appear in `.nsh/dist`. Pushing a matching version tag builds both platforms, runs the installer and app tests, and publishes archives with `SHA256SUMS` to GitHub Releases. The requested version must match `nsh.json`.
