@@ -4,13 +4,15 @@ use std::collections::BTreeMap;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 use std::path::Path;
 
-#[derive(Clone, Default, PartialEq)]
+#[derive(Clone, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Workloads {
     pub projects: Vec<Workload>,
     pub agents: Vec<Workload>,
 }
 
-#[derive(Clone, Default, PartialEq)]
+#[derive(Clone, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Workload {
     pub name: String,
     pub detail: String,

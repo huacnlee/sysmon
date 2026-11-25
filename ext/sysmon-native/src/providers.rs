@@ -1,7 +1,8 @@
 //! Optional, read-only device telemetry. Call `collect` on a background worker.
 //! Missing commands, denied access, disconnected engines and unsupported platforms
 //! remain unavailable rather than becoming fabricated zero values.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Battery {
     pub percent: f32,
     pub status: String,
@@ -11,7 +12,8 @@ pub struct Battery {
     pub power_w: Option<f32>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Container {
     pub name: String,
     pub image: String,
@@ -27,7 +29,8 @@ pub struct Container {
     pub network_tx: u64,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Extras {
     pub battery: Option<Battery>,
     pub battery_status: String,
@@ -878,10 +881,10 @@ fn parse_lsof_ports(output: &str) -> Vec<(u32, String)> {
     for line in output.lines() {
         if let Some(p) = line.strip_prefix('p') {
             pid = p.parse::<u32>().ok();
-        } else if let Some(endpoint) = line.strip_prefix('n') {
-            if let (Some(pid), Some(port)) = (pid, endpoint_port(endpoint)) {
-                result.push((pid, port));
-            }
+        } else if let Some(endpoint) = line.strip_prefix('n')
+            && let (Some(pid), Some(port)) = (pid, endpoint_port(endpoint))
+        {
+            result.push((pid, port));
         }
     }
     result.sort();

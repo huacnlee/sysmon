@@ -1,0 +1,27 @@
+[package]
+name = "sysmon-native"
+version = "0.2.0"
+edition = "2024"
+license = "MIT"
+description = "System telemetry collectors for the sysmon TSX app"
+keywords = ["nshm"]
+publish = false
+
+[dependencies]
+nsh-core = "0.7"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+sysinfo = { version = "0.37", default-features = false, features = ["system", "disk", "network"] }
+
+# iOS uses public libc/Mach APIs for this app's own task. sysinfo 0.37's
+# process/network implementation references macOS-only symbols on iOS.
+[target.'cfg(target_os = "ios")'.dependencies]
+libc = "0.2"
+dispatch2 = "0.3.1"
+objc2-ui-kit = { version = "0.3.2", default-features = false, features = ["std", "UIDevice"] }
+objc2-avf-audio = { version = "0.3.2", default-features = false, features = ["std", "AVAudioSession", "AVAudioSessionRoute"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+libc = "0.2"
