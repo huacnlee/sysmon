@@ -1,4 +1,5 @@
 //! sysmon: a native, live system dashboard.
+use nsh_icon_lucide::Lucide;
 use nsh_core::prelude::*;
 use std::{sync::mpsc, time::Duration};
 mod app_list;
@@ -47,9 +48,6 @@ const TABS: [&str; 13] = [
     "Projects",
     "Agents",
     "Containers",
-];
-const ICONS: [&str; 13] = [
-    "⊞", "⌘", "▥", "▤", "◎", "▱", "◈", "▰", "♫", "ᛒ", "▱", "♧", "⬡",
 ];
 #[derive(Clone, Default, PartialEq)]
 struct Sample {
@@ -328,7 +326,14 @@ fn unavailable(tab: usize) -> impl IntoElement {
         .rounded(px(8.))
         .p_5()
         .gap_3()
-        .child(title(format!("{}  {}", ICONS[tab], heading), COLORS[tab]))
+        .child(
+            view()
+                .flex_row()
+                .items_center()
+                .gap_2()
+                .child(visuals::icon(tab, COLORS[tab], 15.))
+                .child(title(heading, COLORS[tab])),
+        )
         .child(label(body))
 }
 #[component]
@@ -679,7 +684,11 @@ fn workload_rows(
                                         .text_size(px(16.))
                                         .font_weight(FontWeight::SEMIBOLD),
                                 )
-                                .child(label(if open { "⌄" } else { "›" })),
+                                .child(visuals::glyph(
+                                    if open { Lucide::ChevronDown } else { Lucide::ChevronRight },
+                                    MUTED,
+                                    14.,
+                                )),
                         ),
                 )
                 .when(open, |v| {

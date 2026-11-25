@@ -5,6 +5,7 @@ use crate::{
     COLORS, MUTED, Sample, gb, label, live_views, motion, providers::Extras, reading, title,
     visuals,
 };
+use nsh_icon_lucide::Lucide;
 use nsh_core::{
     mobile::{TabBarItem, tab_bar},
     prelude::*,
@@ -214,7 +215,7 @@ fn activity(data: Signal<Sample>, detail: Signal<usize>) -> impl IntoElement {
                                     .text_color(rgb(MUTED)),
                                 ),
                         )
-                        .child(text("›").text_size(px(24.)).text_color(rgb(MUTED)))
+                        .child(visuals::glyph(Lucide::ChevronRight, MUTED, 20.))
                 })),
         )
 }
