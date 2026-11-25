@@ -400,8 +400,15 @@ pub fn App() -> impl IntoElement {
     });
     // OS is fixed for the lifetime of the host. Keep the chosen shell as the
     // direct root so it receives the full viewport rather than a region wrapper.
+    // NSH 0.7: a Rust root declares its desktop window; nothing shows without one.
     if is_desktop() {
-        desktop_shell(tab, paused, expanded_workload, data, extras, ready).into_element()
+        nsh_core::element::desktop::window()
+            .id("main")
+            .title("sysmon")
+            .default_size(Size::new(px(1120.), px(760.)))
+            .attributes(titlebar::window_attributes())
+            .content(move || desktop_shell(tab, paused, expanded_workload, data, extras, ready))
+            .into_element()
     } else {
         mobile::shell(data, extras, paused, ready).into_element()
     }

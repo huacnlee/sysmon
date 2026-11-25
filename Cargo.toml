@@ -7,10 +7,12 @@ publish = false
 [workspace]
 
 [dependencies]
-nsh-core = { git = "https://github.com/longbridge/nsh", tag = "nightly" }
+# `svg` draws the nsh-icon icons (data: SVG images) on every target, including
+# the platform crates below that turn their default features off.
+nsh-core = { git = "https://github.com/longbridge/nsh", tag = "nightly", features = ["svg"] }
 nsh-base = { git = "https://github.com/longbridge/nsh", tag = "nightly" }
-nsh-icon = "0.2.0"
-nsh-icon-lucide = "0.2.0"
+nsh-icon = "0.2.1"
+nsh-icon-lucide = "0.2.1"
 env_logger = "0.11"
 
 [target.'cfg(not(target_os = "ios"))'.dependencies]

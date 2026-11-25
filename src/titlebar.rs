@@ -8,16 +8,16 @@ use nsh_core::{
 
 pub fn install() {
     set_color_scheme(Appearance::Dark);
-    effect(|| {
-        if is_desktop() {
-            let mut title_bar = TitleBarOptions::default();
-            title_bar.style = TitleBarStyle::Hidden;
-            title_bar.height = Some(px(40.));
-            let mut attributes = WindowAttributes::default();
-            attributes.title_bar = Some(title_bar);
-            desktop::current_window().set(attributes);
-        }
-    });
+}
+
+/// The main window draws its own 40-point title bar ([`bar`]).
+pub fn window_attributes() -> WindowAttributes {
+    let mut title_bar = TitleBarOptions::default();
+    title_bar.style = TitleBarStyle::Hidden;
+    title_bar.height = Some(px(40.));
+    let mut attributes = WindowAttributes::default();
+    attributes.title_bar = Some(title_bar);
+    attributes
 }
 
 /// The primary destinations remain visible as icons with their live readings.
