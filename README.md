@@ -24,22 +24,22 @@ Run the same command to upgrade. To pin a release, download the script and run `
 
 Release archives must exist for your OS and CPU architecture. The release workflow builds native packages on `macos-15` and `ubuntu-24.04`; manual workflow runs produce downloadable CI artifacts without publishing a release. Existing source-only releases cannot be installed with this command until binary assets and checksums have been attached.
 
-To build an archive locally (Python 3.11+, Rust and platform SDK required):
+To build an archive locally (Python 3.11+, Rust, the NSH nightly CLI and the platform SDK required):
 
 ```sh
 python3 -m unittest discover -s tests -p 'test_*.py' -v
-python3 scripts/build-release.py --version 0.1.5
+python3 scripts/build-release.py --version 0.1.6
 ```
 
-Archives appear in `.nsh/dist`. Pushing a matching version tag builds both platforms, runs installer and Rust tests, and publishes archives with `SHA256SUMS` to GitHub Releases. The requested version must match both `Cargo.toml` and `nsh.json`.
+Archives appear in `.nsh/dist`. Pushing a matching version tag builds both platforms, runs the installer and app tests, and publishes archives with `SHA256SUMS` to GitHub Releases. The requested version must match `nsh.json`.
 
 ## Development
 
-Install Rust stable and the NSH nightly CLI, plus the platform SDKs described in [PLATFORMS.md](PLATFORMS.md).
+Install Rust stable and the NSH nightly CLI, plus the platform SDKs described in [PLATFORMS.md](PLATFORMS.md). `scripts/setup-nightly.sh` builds the pinned nightly into `.nsh/bin/nsh`.
 
 ```sh
-cargo install --git https://github.com/longbridge/nsh --tag nightly --locked nsh-cli
-cargo run                         # native desktop
+scripts/setup-nightly.sh && export PATH="$PWD/.nsh/bin:$PATH"
+nsh run                            # native desktop
 nsh run --target macos
 nsh run --target windows
 nsh run --target linux
@@ -47,13 +47,21 @@ nsh run --target ios               # iOS simulator, on macOS
 nsh run --target android           # emulator or connected device
 ```
 
-Run each target on a host with its platform SDK installed. The application root is `App` in `src/lib.rs`, configured by `nsh.json`. NSH generates native mobile runners from this Rust root; a TypeScript UI entry is not required. The optional native module import is `sysmon/native`.
+Run each target on a host with its platform SDK installed. sysmon is a TSX app: `App.tsx` mounts the interface in `src/`, and the collectors are the Rust native module in `ext/sysmon-native` (an `nshm` crate, imported as `sysmon-native`). The UI owns presentation and history; the module samples the device on its own thread and returns readings as JSON.
+
+| Path | Contents |
+| --- | --- |
+| `src/model.ts`, `src/monitor.ts` | Reading types, formatting, history and the sampling loop |
+| `src/ui.tsx`, `src/motion.tsx`, `src/chart.tsx` | The app's styled components: panels, odometer readings, live charts |
+| `src/pages/`, `src/Desktop.tsx`, `src/Mobile.tsx` | Pages and the desktop and phone shells |
+| `theme.json` | Design tokens for every color the app draws |
+| `ext/sysmon-native/` | CPU, memory, disk, network, GPU, process, battery and Docker collectors |
 
 ## Monitoring and limits
 
 - Live views stay mounted between samples. Application lists are virtualized, so only nearby rows are mounted while the complete dataset remains searchable and scrollable.
 - Large readings use native digit reels with stable decimal points and units. Reduced motion switches readings immediately.
-- Transitions, springs, card entrances, reading updates and chart geometry run through NSH native animation bindings; there is no Rust frame loop rebuilding the interface. Reduced-motion settings are respected.
+- Transitions, card entrances, reading updates and chart geometry run through NSH native animated values; no JavaScript runs per frame. Reduced-motion settings are respected.
 - Charts use actual samples, gradient fills, live endpoints and pointer readouts. Memory graphs explicitly label their windowed vertical range; their time axis uses actual capture timestamps. Pauses remain visible as gaps. Network plots show download and upload in bytes per second rather than normalized percentages. Hover or press and drag to inspect a sample.
 - Core readings update every two seconds. Device and Docker information refresh every 30 seconds. Blocking collectors run away from the UI thread.
 - Pause freezes displayed samples. History starts at launch, holds up to 60 samples, and is not persisted. Rate measurements wait for a baseline.
@@ -68,19 +76,22 @@ Run each target on a host with its platform SDK installed. The application root 
 ## Checks
 
 ```sh
-cargo check --locked --all-targets
-cargo test --locked --lib
+nsh check     # Rust module and TypeScript types
+nsh build     # bundle, class and export warnings
+nsh test      # Rust unit tests, then tests/*.test.tsx headless
+cargo clippy --manifest-path ext/sysmon-native/Cargo.toml --all-targets -- --deny warnings
+cargo fmt --manifest-path ext/sysmon-native/Cargo.toml --check
 ```
 
-For mobile library checks, first install the corresponding Rust target:
+For mobile module checks, first install the corresponding Rust target:
 
 ```sh
-cargo check --locked --lib --target aarch64-apple-ios
-cargo check --locked --lib --target aarch64-apple-ios-sim
-cargo check --locked --lib --target aarch64-linux-android
+cargo check --manifest-path ext/sysmon-native/Cargo.toml --locked --target aarch64-apple-ios
+cargo check --manifest-path ext/sysmon-native/Cargo.toml --locked --target aarch64-apple-ios-sim
+cargo check --manifest-path ext/sysmon-native/Cargo.toml --locked --target aarch64-linux-android
 ```
 
-[Native platform CI](.github/workflows/platforms.yml) is configured to check desktop builds and unit tests on Windows, macOS and Linux, and library compilation for iOS devices, iOS simulators and Android. Consult an actual workflow run for its result; configuration alone does not prove a passing build. Compile checks do not replace device testing or verify signing and distribution.
+[Native platform CI](.github/workflows/platforms.yml) is configured to type-check, build and test the app on macOS and Linux, and to compile the native module for iOS devices, iOS simulators and Android. Consult an actual workflow run for its result; configuration alone does not prove a passing build. Compile checks do not replace device testing or verify signing and distribution.
 
 ## Packaging
 
@@ -92,6 +103,6 @@ nsh package --target ios-simulator
 nsh package --target android
 ```
 
-Signed iOS device packages require a signing identity and provisioning profile. See [PLATFORMS.md](PLATFORMS.md) for platform requirements and commands. Generated runners, packages and local test captures are stored under `.nsh/`; Cargo builds stay under `target/`.
+Signed iOS device packages require a signing identity and provisioning profile. See [PLATFORMS.md](PLATFORMS.md) for platform requirements and commands. Generated runners, packages and local test captures are stored under `.nsh/`; the native module builds under `ext/sysmon-native/target/`.
 
 Android packages need JDK 17+ and the Android SDK/NDK. Pass signing flags such as `--keystore` and `--key-alias` to `nsh package`, with `NSH_KEYSTORE_PASSWORD` for the password.

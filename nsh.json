@@ -3,11 +3,17 @@
   "id": "dev.sysmon.app",
   "version": "0.1.6",
   "build": 8,
-  "rust": ".",
-  "root": "App",
   "appearance": "dark",
+  "theme": "theme.json",
   "statusBar": {
     "foreground": "light"
   },
-  "icon": "assets/icon.png"
+  "icon": "assets/icon.png",
+  "dependencies": {
+    "sysmon-native": {
+      "path": "ext/sysmon-native"
+    },
+    "nsh-icon": "^0.2.2",
+    "nsh-icon-lucide": "^0.2.2"
+  }
 }

@@ -2,7 +2,8 @@
 //! known helper processes inherit their application's identity where possible.
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AppUsage {
     /// Stable opaque identity. It contains no executable or bundle path.
     pub id: String,

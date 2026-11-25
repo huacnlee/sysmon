@@ -1,41 +1,67 @@
 #!/usr/bin/env python3
 """Build an installable, self-contained nsh app for the current platform."""
-import argparse, json, hashlib, os, platform, plistlib, shutil, subprocess, sys, tarfile
+import argparse, json, hashlib, os, platform, plistlib, shutil, subprocess, tarfile, tempfile
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parent.parent
 def run(*command,**kwargs):
     subprocess.run(command,cwd=ROOT,check=True,**kwargs)
+
+LAUNCHER='''#!/bin/sh
+set -eu
+launcher=$0
+while [ -L "$launcher" ]; do
+  link=$(readlink "$launcher")
+  case "$link" in /*) launcher=$link;; *) launcher=$(dirname "$launcher")/$link;; esac
+done
+root=$(CDPATH= cd -- "$(dirname -- "$launcher")" && pwd)
+if [ "${1:-}" = --version ] || [ "${1:-}" = -V ]; then
+  read -r version target < "$root/.sysmon-install"
+  echo "sysmon ${version#v}"
+  exit 0
+fi
+if [ -d "$root/sysmon.app" ]; then
+  exec "$root/sysmon.app/Contents/MacOS/sysmon" "$@"
+fi
+exec "$root/sysmon-host" "$@"
+'''
+
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('--version', required=True)
+    parser.add_argument('--version',required=True)
     args=parser.parse_args()
     version=args.version.removeprefix('v')
-    import tomllib
-    package_version=tomllib.loads((ROOT/'Cargo.toml').read_text())['package']['version']
-    if version != package_version or json.loads((ROOT/'nsh.json').read_text())['version'] != version:
-        raise SystemExit('Release version must match Cargo.toml and nsh.json')
+    config=json.loads((ROOT/'nsh.json').read_text())
+    if config['version']!=version:
+        raise SystemExit('Release version must match nsh.json')
     system=platform.system()
     if system not in ('Darwin','Linux'):raise SystemExit('Build on macOS or Linux')
-    if platform.machine() not in ('arm64', 'aarch64', 'x86_64', 'amd64'):
+    if platform.machine() not in ('arm64','aarch64','x86_64','amd64'):
         raise SystemExit('Unsupported CPU architecture')
-    target=f"{'aarch64' if platform.machine() in ('arm64','aarch64') else 'x86_64'}-{'apple-darwin' if system=='Darwin' else 'unknown-linux-gnu'}"
+    arch='aarch64' if platform.machine() in ('arm64','aarch64') else 'x86_64'
+    target=f"{arch}-{'apple-darwin' if system=='Darwin' else 'unknown-linux-gnu'}"
     build=ROOT/'.nsh/package'
     build.mkdir(parents=True,exist_ok=True)
-    env={**os.environ,'DISKTREE_VERSION':version}
-    metadata=json.loads(subprocess.check_output(['cargo','metadata','--format-version','1','--locked'],cwd=ROOT,env=env,text=True))
-    cargo=Path(metadata['target_directory'])
-    run('cargo','build','--manifest-path',str(ROOT/'Cargo.toml'),'--release','--locked','--no-default-features',env=env)
     stage=build/f'sysmon-{version}-{target}'
     if stage.exists():shutil.rmtree(stage)
-    stage.mkdir()
+    with tempfile.TemporaryDirectory(dir=build) as temporary:
+        output=Path(temporary)
+        run('nsh','package','--target','macos' if system=='Darwin' else 'linux','--name','sysmon',
+            '--app-version',version,'--out',str(output))
+        if system=='Darwin':
+            stage.mkdir()
+            shutil.move(output/'sysmon.app',stage/'sysmon.app')
+        else:
+            shutil.move(output/'sysmon',stage)
     if system=='Darwin':
         app=stage/'sysmon.app/Contents'
-        (app/'MacOS').mkdir(parents=True)
-        resources=app/'Resources';resources.mkdir()
-        shutil.copy2(cargo/'release/sysmon',app/'MacOS/sysmon')
+        resources=app/'Resources'
+        with (app/'Info.plist').open('rb') as file:
+            info=plistlib.load(file)
+        info.update(CFBundleName='sysmon',CFBundleDisplayName='sysmon',CFBundleIconFile='AppIcon',
+                    CFBundleShortVersionString=version,CFBundleVersion=version,LSMinimumSystemVersion='14.0')
         with (app/'Info.plist').open('wb') as file:
-            plistlib.dump(dict(CFBundleExecutable='sysmon',CFBundleName='sysmon',CFBundleIconFile='AppIcon',CFBundleIdentifier='dev.sysmon.app',CFBundleShortVersionString=version,CFBundleVersion=version,CFBundlePackageType='APPL',LSMinimumSystemVersion='14.0',NSHighResolutionCapable=True),file)
+            plistlib.dump(info,file)
         run('sips','-s','format','png',str(ROOT/'assets/icon.svg'),'--out',str(build/'icon.png'))
         iconset=build/'AppIcon.iconset'
         if iconset.exists():shutil.rmtree(iconset)
@@ -45,31 +71,29 @@ def main():
                 name=f'icon_{size}x{size}'+('@2x' if scale==2 else '')+'.png'
                 run('sips','-z',str(size*scale),str(size*scale),str(build/'icon.png'),'--out',str(iconset/name))
         run('iconutil','-c','icns',str(iconset),'-o',str(resources/'AppIcon.icns'))
-        launcher=stage/'sysmon'
-        launcher.write_text('''#!/bin/sh
-set -eu
-launcher=$0
-while [ -L "$launcher" ]; do
-  link=$(readlink "$launcher")
-  case "$link" in /*) launcher=$link;; *) launcher=$(dirname "$launcher")/$link;; esac
-done
-root=$(CDPATH= cd -- "$(dirname -- "$launcher")" && pwd)
-exec "$root/sysmon.app/Contents/MacOS/sysmon" "$@"
-''')
-        launcher.chmod(0o755)
+        bundle=resources/'nsh'
     else:
+        (stage/'sysmon').rename(stage/'sysmon-host')
         resources=stage/'resources';resources.mkdir()
-        shutil.copy2(cargo/'release/sysmon',stage/'sysmon')
+        (stage/f"{config['id']}.desktop").unlink(missing_ok=True)
         (stage/'sysmon.desktop').write_text('[Desktop Entry]\nType=Application\nName=sysmon\nComment=Monitor local system resources\nExec=sysmon\nTerminal=false\nCategories=System;Utility;\nIcon=sysmon\nStartupWMClass=dev.sysmon.app\n')
+        bundle=stage/'nsh'
+    if not (bundle/'bundle.nshc').is_file():
+        raise SystemExit('Packaged TSX bundle is missing')
+    metadata=json.loads((bundle/'app.json').read_text())
+    if metadata['id']!=config['id'] or metadata['version']!=version:
+        raise SystemExit('Packaged app identity or version differs from the release')
+    launcher=stage/'sysmon'
+    launcher.write_text(LAUNCHER)
+    launcher.chmod(0o755)
+    (stage/'.sysmon-install').write_text(f'v{version} {target}\n')
     shutil.copy2(ROOT/'assets/icon.svg',resources/'icon.svg')
     shutil.copy2(ROOT/'LICENSE',stage/'LICENSE')
-    runtime=next(p for p in metadata['packages'] if p['name']=='nsh-core')
-    if runtime['license'] != 'Apache-2.0':
-        raise SystemExit('Review NSH license before packaging')
     shutil.copy2(ROOT/'assets/LICENSE.nsh',stage/'LICENSE.nsh')
     if system=='Darwin':run('codesign','--force','--deep','--sign','-','--timestamp=none',str(stage/'sysmon.app'))
-    # Validate the CLI wrapper before archiving; smoke-package checks native scanning.
-    run(str(stage/'sysmon'),'--version')
+    reported=subprocess.check_output([stage/'sysmon','--version'],text=True).strip()
+    if reported!=f'sysmon {version}':
+        raise SystemExit(f'Unexpected launcher version: {reported}')
     dist=ROOT/'.nsh/dist';dist.mkdir(exist_ok=True)
     archive=dist/f'sysmon-v{version}-{target}.tar.gz'
     with tarfile.open(archive,'w:gz') as tar:

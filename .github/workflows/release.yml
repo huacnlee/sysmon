@@ -38,10 +38,14 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-          key: release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock') }}
+            ext/sysmon-native/target
+          key: release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ext/**/Cargo.lock') }}
           restore-keys: |
             release-${{ runner.os }}-${{ runner.arch }}-
+      - name: Build NSH nightly and select it for subsequent steps
+        run: |
+          scripts/setup-nightly.sh
+          echo "$PWD/.nsh/bin" >> "$GITHUB_PATH"
       - name: Installer regression tests
         run: python -B -m unittest discover -s tests -p 'test_*.py' -v
       - name: Build native package
@@ -51,8 +55,8 @@ jobs:
         run: |
           version="${INPUT_VERSION:-${TAG#v}}"
           python scripts/build-release.py --version "$version"
-      - name: Rust regression tests
-        run: cargo test --lib --locked
+      - name: Regression tests
+        run: nsh test
       - uses: actions/upload-artifact@v4
         with:
           name: sysmon-${{ runner.os }}-${{ runner.arch }}
